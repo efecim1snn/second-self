@@ -3,10 +3,15 @@
 /**
  * AYIRT EDICI OZELLIKLER ve RISK SEVIYELERI
  *
- * Her ozellik gorsel modellerinde ayni kararlilikta uretilmez. Bazilari
- * (dovme, yogun cil) her karede degisir ve tutarliligi gorunur sekilde bozar.
- * Kullanicinin bunu SECMEDEN once bilmesi gerekir - o yuzden risk ve uyari
- * metni ozellikle birlikte duruyor.
+ * Her ozellik gorsel modellerinde ayni kararlilikta uretilmez. Kullanicinin
+ * bunu SECMEDEN once bilmesi gerekir - o yuzden risk ve uyari metni
+ * ozellikle birlikte duruyor.
+ *
+ * DOVME ve CIL BILEREK KALDIRILDI (geri ekleme).
+ * Gercek uretim testlerinde ikisi de tutarliligi gorunur sekilde bozdu:
+ * dovme deseni her karede farkli cikti, cil yogunlugu kaydi ve uzak
+ * cekimlerde lekeye dondu. Ustelik model bunlari ISTENMEDEN de ekliyordu -
+ * bu yuzden artik NEGATIF listeye yaziliyorlar (bkz. promptcraft.NEGATIVE).
  *
  * risk: 'yuksek' | 'orta' | 'dusuk'
  * en  : prompt'a giren Ingilizce tarif
@@ -21,18 +26,6 @@ const DISTINCTIVE = [
     note: 'En tutarli secim. Karakteri ayirt eden sey yuz hatlari ve sac olur.',
   },
   {
-    value: 'Ciller (hafif)',
-    en: 'a light dusting of freckles across the nose and cheeks',
-    risk: 'orta',
-    note: 'Cil dagilimi her karede biraz degisir. Hafif cil, yogun cile gore cok daha kararli durur.',
-  },
-  {
-    value: 'Ciller (yogun)',
-    en: 'dense freckles covering the nose, cheeks and forehead',
-    risk: 'yuksek',
-    note: 'Yogun cil hatayi ciddi artirir: yogunluk ve desen her karede degisir, uzak cekimlerde leke gibi gorunur. Yakin plan agirlikli calisacaksan tercih et.',
-  },
-  {
     value: 'Ben (yuzde)',
     en: 'a small beauty mark just above the lip',
     risk: 'orta',
@@ -43,36 +36,6 @@ const DISTINCTIVE = [
     en: 'thin round metal-framed glasses',
     risk: 'dusuk',
     note: 'Kararli calisir. Cerceve tipini prompt sabit tuttugu icin nadiren degisir.',
-  },
-  {
-    value: 'Dovme (bilek)',
-    en: 'a small fine-line tattoo on the inner wrist',
-    risk: 'yuksek',
-    note: 'DOVME EN COK HATA URETEN OZELLIKTIR. Yapay zeka ayni deseni iki kez uretemez - her karede farkli cikar ve izleyen bunu hemen fark eder. Kullanacaksan kucuk ve basit tut.',
-  },
-  {
-    value: 'Dovme (kol)',
-    en: 'a fine-line tattoo on the forearm',
-    risk: 'yuksek',
-    note: 'DOVME EN COK HATA URETEN OZELLIKTIR. Desen her karede degisir. Kolun gorundugu her karede farkli bir dovme cikacagini bil; cogu karede kiyafetle kapatmak en pratik cozum.',
-  },
-  {
-    value: 'Dovme (boyun)',
-    en: 'a small tattoo on the side of the neck',
-    risk: 'yuksek',
-    note: 'DOVME EN COK HATA URETEN OZELLIKTIR. Boyun dovmesi neredeyse her karede gorunur oldugu icin tutarsizlik en cok burada goze batar. Onerilmez.',
-  },
-  {
-    value: 'Dovme (sirt)',
-    en: 'a tattoo across the upper back',
-    risk: 'yuksek',
-    note: 'DOVME EN COK HATA URETEN OZELLIKTIR. Sirt dovmesi sadece bazi karelerde gorundugu icin boyun/koldan daha az risklidir ama yine de her seferinde farkli cikar.',
-  },
-  {
-    value: 'Dovme (parmak)',
-    en: 'tiny minimalist tattoos on two fingers',
-    risk: 'yuksek',
-    note: 'Cift risk: hem dovme degisir hem eller zaten yapay zekanin en zayif oldugu yerdir. Kacinmani oneririm.',
   },
   {
     value: 'Piercing (burun)',
@@ -141,13 +104,12 @@ function describe(values) {
 }
 
 /**
- * Yalnizca bas-omuz kadrajinda GORUNEBILEN ozellikler.
- * Vesikalikta bilek/kol/sirt dovmesi gorunmez; prompt'ta birakilirsa model
- * onu omuza/boyna uydurmaya calisir ve her karede farkli bir dovme cizer.
+ * Bas-omuz kadrajinda gorunebilen ozellikler (vesikalik icin).
+ * Su an listedeki her ozellik yuz/bas bolgesinde oldugu icin tamami gecerli;
+ * ilerde govde seviyesinde bir ozellik eklenirse NOT_IN_HEADSHOT'a yaz -
+ * yoksa model onu kadraja sigdirmaya calisip her karede farkli cizer.
  */
-const NOT_IN_HEADSHOT = new Set([
-  'Dovme (bilek)', 'Dovme (kol)', 'Dovme (sirt)', 'Dovme (parmak)',
-]);
+const NOT_IN_HEADSHOT = new Set([]);
 
 function describeFacial(values) {
   return (values || [])
@@ -164,12 +126,4 @@ function risks(values) {
     .map(({ value, risk, note }) => ({ value, risk, note }));
 }
 
-function hasTattoo(values) {
-  return (values || []).some((v) => v.startsWith('Dovme'));
-}
-
-function hasFreckles(values) {
-  return (values || []).some((v) => v.startsWith('Ciller'));
-}
-
-module.exports = { DISTINCTIVE, get, options, meta, describe, describeFacial, risks, hasTattoo, hasFreckles };
+module.exports = { DISTINCTIVE, get, options, meta, describe, describeFacial, risks };

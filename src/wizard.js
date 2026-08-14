@@ -121,7 +121,7 @@ const QUESTIONS = [
   {
     key: 'distinctive',
     label: 'Ayirt edici ozellikler',
-    hint: 'Karakteri kalabaliktan ayiran detaylar. En fazla 2 sec. DIKKAT: bazi ozellikler (ozellikle dovme ve yogun cil) her karede farkli cikar ve hata payini ciddi artirir - risk rozetlerine bak.',
+    hint: 'Karakteri kalabaliktan ayiran detaylar. En fazla 2 sec. Dovme ve cil listeden cikarildi: her karede farkli ciktiklari icin tutarliligi bozuyorlardi, artik aktif olarak engelleniyorlar. Kalan seceneklerin risk rozetlerine bak.',
     type: 'multiselect',
     required: false,
     min: 0,

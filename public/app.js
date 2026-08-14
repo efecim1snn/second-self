@@ -449,9 +449,13 @@ async function renderReference() {
     model karakteri yandan gostermek istediginde tahmin etmeye baslar ve yuz kayar. Bu set onu engeller.</p>
 
     <div class="notice info">
-      <b>8 karede degisen tek sey acidir.</b> Kiyafet (duz beyaz tisort), arka plan (duz acik gri),
+      <b>Karelerde degisen tek sey acidir.</b> Kiyafet (duz beyaz tisort), arka plan (duz acik gri),
       isik ve ifade birebir ayni tutulur. Degisen her ek degisken yuzu kaydirir.
       Bu set ayni zamanda LoRA egitimi veya platformda "karakter" olusturmak icin gereken minimum veri setidir.
+      <br><br>
+      <b>Once "Karakter sayfasi"ni uret.</b> Uc gorunumu tek karede birden cikarir; model ayni goruntu
+      icinde kendini tutarli tutmak zorunda kaldigi icin, referans gorsel kabul etmeyen ucretsiz
+      modellerde en tutarli sonucu veren yontem budur.
     </div>
 
     ${!generates ? `<div class="notice warn">

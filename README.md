@@ -121,21 +121,28 @@ Aynı yüzü her seferinde yakalamak dört katmandır:
 
 ## Hata payı uyarıları
 
-Bazı özellikler yapay zekâda **her karede farklı çıkar.** Sihirbaz bunları seçerken risk rozeti gösterir
-ve karakter kartında uyarı kalıcı olarak durur:
+### Dövme ve çil tamamen kaldırıldı
+
+Gerçek üretim testlerinde ikisi de tutarlılığı görünür şekilde bozdu:
+
+- **Dövme** — AI aynı deseni iki kez üretemez. Her karede farklı bir dövme çıkar ve izleyen bunu hemen fark eder.
+- **Çil** — yoğunluk ve dağılım her karede kayar, uzak çekimlerde lekeye dönüşür.
+
+Üstelik model bunları **istenmeden de ekliyordu** (ilk testte omuza rastgele bir dövme çizdi).
+Bu yüzden ikisi de artık seçilebilir özellik değil ve **negatif prompt'ta aktif olarak engelleniyorlar.**
+Negatif prompt desteklemeyen modellerde (FLUX, DALL·E) olumlu ifadeyle engelleniyor:
+prompt'a `clear even-toned skin with no markings` giriyor — çünkü bu modellerde "dövme yok" demek
+bazen ters teper.
+
+### Kalan özelliklerin risk seviyeleri
 
 | Özellik | Risk | Neden |
 |---|---|---|
-| **Dövme** (her yeri) | 🔴 Yüksek | AI aynı deseni iki kez üretemez. Her karede farklı çıkar ve izleyen fark eder. Kullanacaksan küçük ve basit tut, çoğu karede kıyafetle kapat. |
-| **Çiller (yoğun)** | 🔴 Yüksek | Yoğunluk ve dağılım her karede değişir; uzak çekimlerde lekeye dönüşür. |
 | **Heterokromi** | 🔴 Yüksek | Modeller ya yok sayar ya yanlış göze uygular. |
-| **Çiller (hafif)** | 🟠 Orta | Dağılım biraz oynar ama kabul edilebilir. |
 | Ben, piercing, beyaz saç tutamı, sabit kolye | 🟠 Orta | Yeri/biçimi karelerde kayabilir. |
 | Gözlük, gamze, belirgin kaşlar | 🟢 Düşük | Kararlı çalışır. |
 
-Otomasyon ayrıca riskli özellik seçildiğinde negatif prompt'a hedefli eklemeler yapar
-(çil → `blotchy skin`, dövme → `smudged tattoo`) ve **bilek/kol/sırt dövmesini vesikalık
-promptundan tamamen çıkarır** — çünkü baş-omuz kadrajında görünmez, bırakılırsa model uydurur.
+Sihirbaz bunları seçerken risk rozeti gösterir, karakter kartında uyarı kalıcı olarak durur.
 
 ---
 

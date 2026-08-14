@@ -1,7 +1,7 @@
-'use strict';
+﻿'use strict';
 
 /**
- * AI INFLUENCER OTOMASYON - yerel panel sunucusu
+ * SECOND SELF - yerel panel sunucusu
  *
  * Sifir bagimlilik. Node 18+ yeterli.
  *
@@ -165,7 +165,17 @@ function referencePayload(character) {
 async function generateScene(character, scene, count = 1) {
   const { spec, config } = activeProvider();
   const dialect = config.dialect || spec.dialect;
-  const built = promptcraft.build(character, scene, dialect);
+
+  // Vesikalikta aci basina seed kaydirmak SADECE referans gorsel kabul eden
+  // platformlarda dogru: orada kimligi referans tutar, seed sadece kompozisyonu
+  // degistirir. Referans kabul etmeyen bir modelde seed'i kaydirmak kimligi de
+  // degistirir - 8 aci yerine 8 farkli insan elde edersin. Bu yuzden orada
+  // seed sabit birakilir (en azindan tek bir tutarli yuz kalir).
+  const effectiveScene = (scene.seedOffset && !spec.supportsReference)
+    ? { ...scene, seedOffset: 0 }
+    : scene;
+
+  const built = promptcraft.build(character, effectiveScene, dialect);
   const aspectMeta = promptcraft.ASPECT[built.aspect];
 
   if (spec.id === 'manual') {

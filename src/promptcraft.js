@@ -135,33 +135,38 @@ const NEGATIVE = [
   'watermark', 'signature', 'text', 'logo', 'caption',
   'duplicate person', 'cloned face', 'two heads',
   'cartoon', 'anime', '3d render', 'cgi', 'illustration', 'painting',
+  // Dovme ve cil karakter secenegi olmaktan cikarildi: her karede farkli
+  // ciktiklari icin tutarliligi bozuyorlardi. Model bunlari ISTENMEDEN de
+  // ekliyordu (ilk testte omuza rastgele dovme cizdi), o yuzden burada
+  // aktif olarak engelleniyorlar.
+  'tattoo', 'tattoos', 'tattooed skin', 'body art',
+  'freckles', 'freckled skin', 'blotchy skin', 'skin blemishes', 'acne',
 ];
 
 /**
- * Riskli ozellikler secildiginde negatif listeye eklenenler.
- * Negatif prompt tutarliligi tam cozmez ama en sik goruleni (cilin lekeye
- * donusmesi, dovmenin bulaniklasmasi) belirgin sekilde azaltir.
+ * Negatif prompt DESTEKLEMEYEN lehcelerde (FLUX, DALL-E) dovme/cil'i
+ * engellemenin yolu olumlu ifadedir: "dovme yok" demek yerine cildi
+ * "temiz ve duz tonlu" diye tarif etmek. Olumsuzlama bu modellerde bazen
+ * ters teper (kelimeyi gorup nesneyi cizerler).
  */
-const RISK_NEGATIVE = {
-  freckles: ['blotchy skin', 'skin blemishes', 'acne', 'smudged freckles', 'muddy skin tone', 'dirt on face'],
-  tattoo: ['blurry tattoo', 'smudged tattoo', 'illegible tattoo text', 'random tattoos', 'tattoo sleeve', 'body covered in tattoos'],
-};
+const CLEAN_SKIN = 'clear even-toned skin with no markings';
 
 const QUALITY = {
   photo: [
-    'photorealistic', 'natural skin texture with visible pores', 'candid photograph',
-    'shot on 85mm lens', 'shallow depth of field', 'sharp focus on the eyes',
-    'realistic color grading', 'high detail',
+    'photorealistic', 'natural skin texture with visible pores', CLEAN_SKIN,
+    'candid photograph', 'shot on 85mm lens', 'shallow depth of field',
+    'sharp focus on the eyes', 'realistic color grading', 'high detail',
   ],
   editorial: [
-    'editorial fashion photograph', 'studio quality', 'natural skin texture',
+    'editorial fashion photograph', 'studio quality', 'natural skin texture', CLEAN_SKIN,
     'shot on medium format camera', 'sharp focus', 'high detail',
   ],
   // Vesikalik seti: kimligi tanimlayan kare. Sanatsal hicbir sey istemiyoruz.
   reference: [
-    'photorealistic', 'natural skin texture with visible pores', 'sharp focus across the whole face',
-    'evenly lit', 'no makeup styling', 'no jewellery', 'no accessories',
-    'shot on 85mm lens at f/8', 'full face in focus', 'high detail', 'identification photo',
+    'photorealistic', 'natural skin texture with visible pores', CLEAN_SKIN,
+    'sharp focus across the whole face', 'evenly lit', 'no makeup styling',
+    'no jewellery', 'no accessories', 'shot on 85mm lens at f/8',
+    'full face in focus', 'high detail', 'identification photo',
   ],
 };
 
@@ -241,13 +246,9 @@ const REFERENCE_NEGATIVE = [
   'heavy makeup', 'full body', 'wide shot', 'multiple people', 'text overlay',
 ];
 
-/** Secilen riskli ozelliklere gore negatif listeyi genisletir. */
+/** Sahneye gore negatif listeyi genisletir. */
 function negativeFor(identity, scene = {}) {
-  const list = distinctiveList(identity);
-  const extra = [];
-  if (traits.hasFreckles(list)) extra.push(...RISK_NEGATIVE.freckles);
-  if (traits.hasTattoo(list)) extra.push(...RISK_NEGATIVE.tattoo);
-  if (scene.style === 'reference') extra.push(...REFERENCE_NEGATIVE);
+  const extra = scene.style === 'reference' ? REFERENCE_NEGATIVE : [];
   return [...NEGATIVE, ...extra].join(', ');
 }
 
@@ -274,7 +275,7 @@ function buildReferencePrompt(identity, scene, dialect) {
       `${capitalise(scene.pose)}.`,
       'They are wearing a plain white crew-neck t-shirt.',
       'Flat, even studio lighting with no harsh shadows and no coloured light.',
-      'Photorealistic, natural skin texture with visible pores, sharp focus across the whole face, high detail.',
+      `Photorealistic, natural skin texture with visible pores, ${CLEAN_SKIN}, sharp focus across the whole face, high detail.`,
       'The background is completely empty - no scenery, no furniture, no props, no jewellery.',
     ].join(' ');
   }
@@ -285,7 +286,8 @@ function buildReferencePrompt(identity, scene, dialect) {
     scene.shot, scene.pose,
     core,
     'plain white crew-neck t-shirt', 'flat even studio lighting', 'no shadows',
-    'photorealistic', 'natural skin texture with visible pores', 'sharp focus on the face', 'high detail',
+    'photorealistic', 'natural skin texture with visible pores', CLEAN_SKIN,
+    'sharp focus on the face', 'high detail',
   ].filter(Boolean).join(', ');
 }
 
@@ -417,7 +419,11 @@ function build(character, scene = {}, dialect = 'generic') {
   const core = physicalCore(identity);
   const aspectKey = ASPECT[scene.aspect] ? scene.aspect : 'post';
   const aspect = ASPECT[aspectKey];
-  const seed = character.seed;
+  // Vesikalik acilarinda seed kaydirilir (bkz. reference.sceneFor): ayni seed
+  // ile model aci talimatini yok sayip ayni kareyi tekrar uretiyor.
+  const seed = scene.seedOffset
+    ? (character.seed + scene.seedOffset) % 2147483647
+    : character.seed;
   const words = sceneWords(scene);
   const quality = QUALITY[scene.style] || QUALITY.photo;
   const extra = scene.extra ? String(scene.extra).trim() : '';
@@ -517,7 +523,7 @@ function build(character, scene = {}, dialect = 'generic') {
         ].filter(Boolean).join(', ') + '.',
         scene.lighting ? `${capitalise(scene.lighting)}.` : '',
         extra ? `${extra}.` : '',
-        'Photorealistic, natural skin texture with visible pores, realistic colour grading, shot on an 85mm lens, sharp focus on the eyes.',
+        `Photorealistic, natural skin texture with visible pores, ${CLEAN_SKIN}, realistic colour grading, shot on an 85mm lens, sharp focus on the eyes.`,
       ].filter((s) => s && s !== '.').join(' ');
       params.seed = seed;
       params.width = aspect.wh[0];

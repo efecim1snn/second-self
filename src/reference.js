@@ -28,6 +28,19 @@ const BASE_SCENE = {
 
 const ANGLES = [
   {
+    // TEK KAREDE COK GORUNUM.
+    // Referans gorsel kabul etmeyen modellerde (FLUX/Pollinations gibi) en
+    // tutarli yontem budur: acilari ayri ayri uretmek yerine hepsini AYNI
+    // karede uretmek. Model tek bir goruntu icinde kendini tutarli tutmak
+    // zorunda kaldigi icin yuz, sac ve kiyafet uc gorunumde de ayni cikar.
+    key: 'sheet',
+    label: 'Karakter sayfasi (3 gorunum)',
+    order: 0,
+    isSheet: true,
+    aspect: 'wide',
+    pose: 'shown three times side by side in a single frame as a character model sheet: front view on the left, 45 degree three-quarter view in the middle, and full side profile on the right, identical face, identical hair and identical clothing in all three, evenly spaced, neutral expression with the mouth closed',
+  },
+  {
     key: 'front',
     label: 'Onden (0°)',
     order: 1,
@@ -91,6 +104,14 @@ function sceneFor(angleKey) {
     category: 'reference',
     categoryLabel: `Vesikalik · ${angle.label}`,
     pose: angle.pose,
+    aspect: angle.aspect || BASE_SCENE.aspect,
+    shot: angle.isSheet
+      ? 'a character model sheet with three head-and-shoulders views of the same person side by side'
+      : BASE_SCENE.shot,
+    // Her aciya kimlikten turetilmis FARKLI bir seed verilir.
+    // Ayni seed + ayni kalip = model aci talimatini yok sayip birebir ayni
+    // kareyi tekrar uretiyor; 8 kare yerine 1 kareyi 8 kez almis oluyorduk.
+    seedOffset: angle.order * 7919,
   };
 }
 
