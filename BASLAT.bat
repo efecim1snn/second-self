@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title AI Influencer Otomasyon
+title Second Self
 cd /d "%~dp0"
 
 where node >nul 2>nul
@@ -15,7 +15,7 @@ if errorlevel 1 (
 
 echo.
 echo  ================================================
-echo   AI INFLUENCER OTOMASYON
+echo   SECOND SELF - AI influencer karakter otomasyonu
 echo  ================================================
 echo.
 echo  Panel aciliyor: http://localhost:4200

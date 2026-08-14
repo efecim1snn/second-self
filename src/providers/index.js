@@ -12,6 +12,7 @@
  * REGISTRY listesine ekle. Baska hicbir yeri degistirmen gerekmez.
  */
 
+const pollinations = require('./pollinations');
 const manual = require('./manual');
 const leonardo = require('./leonardo');
 const openai = require('./openai');
@@ -23,6 +24,7 @@ const comfyui = require('./comfyui');
 const custom = require('./custom');
 
 const REGISTRY = [
+  pollinations,
   manual,
   leonardo,
   openai,

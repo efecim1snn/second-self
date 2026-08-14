@@ -9,6 +9,8 @@
  */
 
 const crypto = require('crypto');
+const traits = require('./traits');
+const life = require('./life');
 
 const QUESTIONS = [
   {
@@ -118,15 +120,15 @@ const QUESTIONS = [
   },
   {
     key: 'distinctive',
-    label: 'Ayirt edici ozellik',
-    hint: 'Karakteri kalabaliktan ayiran tek detay. Marka isareti gibi calisir.',
-    type: 'select',
-    required: true,
-    options: [
-      'Yok', 'Ciller', 'Ben (yuzde)', 'Gozluk', 'Dovme (kol)', 'Dovme (boyun)',
-      'Piercing (burun)', 'Piercing (kulak)', 'Belirgin kaslar', 'Gamze',
-      'Heterokromi (farkli renkte gozler)', 'Beyaz sac tutami', 'Boyun kolyesi (sabit)',
-    ],
+    label: 'Ayirt edici ozellikler',
+    hint: 'Karakteri kalabaliktan ayiran detaylar. En fazla 2 sec. DIKKAT: bazi ozellikler (ozellikle dovme ve yogun cil) her karede farkli cikar ve hata payini ciddi artirir - risk rozetlerine bak.',
+    type: 'multiselect',
+    required: false,
+    min: 0,
+    max: 2,
+    options: traits.options(),
+    meta: traits.meta(),
+    riskWarning: 'Yuksek riskli bir ozellik sectin. Bu ozellik her uretimde birebir ayni cikmayacak; karakter kartinda ve uretim ekraninda bu uyariyi tekrar goreceksin.',
   },
   {
     key: 'zodiac',
@@ -167,8 +169,12 @@ const QUESTIONS = [
       'Surdurulebilirlik', 'Mental saglik', 'Verimlilik', 'Astroloji',
     ],
   },
+];
+
+const IDENTITY_QUESTIONS = [
   {
     key: 'name',
+    section: 'Kimlik',
     label: 'Karakterin adi',
     hint: 'Bos birakirsan bolgeye uygun bir isim onerilir.',
     type: 'text',
@@ -177,6 +183,7 @@ const QUESTIONS = [
   },
   {
     key: 'handle',
+    section: 'Kimlik',
     label: 'Kullanici adi (@)',
     hint: 'Bos birakirsan isim ve ilgi alanindan uretilir.',
     type: 'text',
@@ -184,6 +191,39 @@ const QUESTIONS = [
     maxLength: 30,
   },
 ];
+
+// Gorunus sorularina bolum etiketi ekle (panelde grupli ilerleme cubugu icin).
+for (const q of QUESTIONS) {
+  if (!q.section) q.section = (q.key === 'zodiac' || q.key === 'education' || q.key === 'interests') ? 'Karakter' : 'Gorunus';
+}
+
+/**
+ * Sihirbazin tam soru listesi: gorunus -> hayat -> karakter -> kimlik.
+ * "Bir insan yaratiyoruz" - o yuzden yuzden sonra hayat da soruluyor.
+ */
+const ALL_QUESTIONS = [...QUESTIONS, ...life.LIFE_QUESTIONS, ...IDENTITY_QUESTIONS];
+
+const LIFE_KEYS = new Set(life.LIFE_QUESTIONS.map((q) => q.key));
+
+/** Panelin gostereceği sorular: bolgeye bagli secenekler cozulmus halde. */
+function questionsFor(answers = {}) {
+  const cities = life.citiesFor(answers.region).map((c) => c.tr);
+  return ALL_QUESTIONS.map((q) => {
+    if (q.type !== 'dynamic-select') return q;
+    const options = q.source === 'cities+same'
+      ? ['Ayni sehir', ...cities]
+      : cities;
+    return { ...q, type: 'select-or-text', options };
+  });
+}
+
+function sections() {
+  const seen = [];
+  for (const q of ALL_QUESTIONS) {
+    if (!seen.includes(q.section)) seen.push(q.section);
+  }
+  return seen;
+}
 
 const NAME_POOL = {
   'Akdeniz': ['Elara', 'Nyla', 'Selin', 'Mira', 'Theo', 'Luca', 'Adrian', 'Kaya'],
@@ -248,8 +288,16 @@ function validate(answers) {
   const errors = [];
   const clean = {};
 
-  for (const q of QUESTIONS) {
+  for (const q of ALL_QUESTIONS) {
     const raw = answers ? answers[q.key] : undefined;
+
+    // Sehir gibi hem listeden secilebilen hem elle yazilabilen alanlar.
+    if (q.type === 'dynamic-select' || q.type === 'select-or-text') {
+      const text = typeof raw === 'string' ? raw.trim() : '';
+      if (!text && q.required) errors.push(`${q.label} zorunlu.`);
+      clean[q.key] = text.slice(0, 60);
+      continue;
+    }
 
     if (q.type === 'measurements') {
       const value = raw && typeof raw === 'object' ? raw : {};
@@ -271,7 +319,10 @@ function validate(answers) {
     }
 
     if (q.type === 'multiselect') {
-      const value = Array.isArray(raw) ? raw.filter((v) => q.options.includes(v)) : [];
+      let value = Array.isArray(raw) ? raw.filter((v) => q.options.includes(v)) : [];
+      value = [...new Set(value)];
+      // "Yok" secildiyse digerlerini elemek gerekir - celiskili olur.
+      if (value.includes('Yok')) value = [];
       if (value.length < q.min) errors.push(`${q.label}: en az ${q.min} secim gerekli.`);
       if (value.length > q.max) errors.push(`${q.label}: en fazla ${q.max} secilebilir.`);
       clean[q.key] = value.slice(0, q.max);
@@ -330,4 +381,25 @@ function deriveSeed(identity) {
   return hash.readUInt32BE(0) % 2147483647;
 }
 
-module.exports = { QUESTIONS, validate, suggestName, suggestHandle, deriveSeed, slugify };
+/** Temiz cevaplardan hayat blogunu ayirir. */
+function extractLife(clean) {
+  const out = {};
+  for (const key of LIFE_KEYS) out[key] = clean[key];
+  if (out.hometown === 'Ayni sehir') out.hometown = out.city;
+  return out;
+}
+
+module.exports = {
+  QUESTIONS,
+  ALL_QUESTIONS,
+  IDENTITY_QUESTIONS,
+  LIFE_KEYS,
+  questionsFor,
+  sections,
+  validate,
+  suggestName,
+  suggestHandle,
+  deriveSeed,
+  slugify,
+  extractLife,
+};

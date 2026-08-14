@@ -9,7 +9,7 @@ fi
 
 echo ""
 echo "================================================"
-echo "  AI INFLUENCER OTOMASYON"
+echo "  SECOND SELF - AI influencer karakter otomasyonu"
 echo "================================================"
 echo ""
 echo "  Panel: http://localhost:${PORT:-4200}"

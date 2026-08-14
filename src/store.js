@@ -60,7 +60,9 @@ function hasCharacter() {
 /* --------------------------------------------------------------- saglayici */
 
 function getProviderConfig() {
-  return readJson(PROVIDERS_FILE, { active: 'manual', entries: {} });
+  // Varsayilan: Pollinations - ucretsiz ve anahtar istemez, boylece otomasyon
+  // kutudan cikar cikmaz calisir. Kullanici istedigi an kendi platformuna gecer.
+  return readJson(PROVIDERS_FILE, { active: 'pollinations', entries: {} });
 }
 
 function saveProviderConfig(config) {

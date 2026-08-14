@@ -1,7 +1,7 @@
 {
-  "name": "ai-influencer-otomasyon",
-  "version": "1.0.0",
-  "description": "Sifirdan AI influencer karakteri yaratir, kilitler ve tutarli gorsel uretimi icin senin bagladigin gorsel uretim API'sine en iyi prompt'u gonderir. Gorsel uretmez - uretici sen baglarsin.",
+  "name": "second-self",
+  "version": "2.0.0",
+  "description": "Sifirdan bir insan yaratir: yuz, hayat, aile, rutin. Karakteri kilitler, 8 acili vesikalik seti cikarir ve bagladigin gorsel uretim API'sine her seferinde ayni kisiyi uretecek prompt'u gonderir. Kendisi gorsel uretmez.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -13,6 +13,7 @@
   "keywords": [
     "ai-influencer",
     "character-consistency",
+    "character-sheet",
     "prompt-engineering",
     "virtual-influencer",
     "instagram",

@@ -1,16 +1,17 @@
-/* AI Influencer Otomasyon - panel */
+/* Second Self - AI influencer karakter otomasyonu · panel */
 'use strict';
 
 const S = {
   tab: 'kurulum',
   status: null,
   questions: [],
+  questionsRegion: null,
   answers: {},
   step: 0,
   providers: null,
   scenes: [],
   scene: null,
-  prompts: null,
+  plan: null,
   busy: false,
 };
 
@@ -72,6 +73,12 @@ function modal(title, bodyHtml, actions) {
 }
 function closeModal() { document.getElementById('modal').hidden = true; }
 
+function riskBadge(risk) {
+  if (risk === 'yuksek') return '<span class="risk high">YUKSEK RISK</span>';
+  if (risk === 'orta') return '<span class="risk mid">ORTA RISK</span>';
+  return '';
+}
+
 /* ------------------------------------------------------------------ boot */
 
 async function refresh() {
@@ -80,7 +87,7 @@ async function refresh() {
 
   const c = S.status.character;
   document.getElementById('charline').textContent = c
-    ? `${c.identity.name} · @${c.identity.handle} · seed ${c.seed}`
+    ? `${c.identity.name} · @${c.identity.handle} · ${c.life ? c.life.city : ''} · seed ${c.seed}`
     : 'karakter yok - sihirbaz bekliyor';
 
   const chip = document.getElementById('providerchip');
@@ -91,16 +98,16 @@ async function refresh() {
 
 function tabs() {
   const has = S.status && S.status.hasCharacter;
+  const ref = S.status && S.status.reference;
+  const refLabel = ref ? `Vesikalik ${ref.done}/${ref.total}` : 'Vesikalik';
   const items = has
-    ? [['karakter', 'Karakter'], ['uretim', 'Uretim'], ['galeri', 'Galeri'], ['ayarlar', 'Ayarlar']]
+    ? [['dosya', 'Karakter dosyasi'], ['vesikalik', refLabel], ['uretim', 'Uretim'], ['plan', 'Haftalik plan'], ['galeri', 'Galeri'], ['ayarlar', 'Ayarlar']]
     : [['kurulum', 'Kurulum'], ['ayarlar', 'Ayarlar']];
   if (!items.find((i) => i[0] === S.tab)) S.tab = items[0][0];
   tabsEl.innerHTML = items
-    .map(([id, label]) => `<button data-tab="${id}" class="${S.tab === id ? 'on' : ''}">${label}</button>`)
+    .map(([id, label]) => `<button data-tab="${id}" class="${S.tab === id ? 'on' : ''}">${esc(label)}</button>`)
     .join('');
   tabsEl.querySelectorAll('button').forEach((b) => {
-    // Her sekme gecisinde durumu tazele: galeri/karakter komut satirindan da
-    // degismis olabilir (ornegin node reset.js).
     b.onclick = async () => {
       S.tab = b.dataset.tab;
       try { await refresh(); } catch (err) { toast(err.message, 'bad'); }
@@ -112,35 +119,56 @@ function tabs() {
 async function render() {
   tabs();
   if (S.tab === 'kurulum') return renderWizard();
-  if (S.tab === 'karakter') return renderCharacter();
+  if (S.tab === 'dosya') return renderDossier();
+  if (S.tab === 'vesikalik') return renderReference();
   if (S.tab === 'uretim') return renderProduction();
+  if (S.tab === 'plan') return renderPlan();
   if (S.tab === 'galeri') return renderGallery();
   if (S.tab === 'ayarlar') return renderSettings();
 }
 
 /* ---------------------------------------------------------------- wizard */
 
+async function loadQuestions() {
+  const data = await api('/api/sorular', { answers: S.answers });
+  S.questions = data.questions;
+  S.questionsRegion = S.answers.region || null;
+}
+
 async function renderWizard() {
-  if (!S.questions.length) {
-    S.questions = (await api('/api/sorular')).questions;
+  if (!S.questions.length || S.questionsRegion !== (S.answers.region || null)) {
+    await loadQuestions();
   }
   const total = S.questions.length;
-  const q = S.questions[S.step];
-  const pct = Math.round((S.step / total) * 100);
-
   if (S.step >= total) return renderWizardSummary();
 
-  let input = '';
+  const q = S.questions[S.step];
+  const pct = Math.round((S.step / total) * 100);
   const value = S.answers[q.key];
+  const metaFor = (opt) => (q.meta || []).find((m) => m.value === opt);
+
+  let input = '';
 
   if (q.type === 'select') {
     input = `<div class="choices">${q.options.map((o) =>
       `<button class="choice ${value === o ? 'on' : ''}" data-pick="${esc(o)}">${esc(o)}</button>`).join('')}</div>`;
+  } else if (q.type === 'select-or-text') {
+    input = `<div class="choices">${q.options.map((o) =>
+      `<button class="choice ${value === o ? 'on' : ''}" data-pick="${esc(o)}">${esc(o)}</button>`).join('')}</div>
+      <div class="field" style="margin-top:14px">
+        <label>Listede yoksa kendin yaz</label>
+        <input id="qinput" value="${esc(value && !q.options.includes(value) ? value : '')}" placeholder="orn. Lizbon, Portekiz">
+      </div>`;
   } else if (q.type === 'multiselect') {
     const sel = Array.isArray(value) ? value : [];
-    input = `<div class="choices">${q.options.map((o) =>
-      `<button class="choice ${sel.includes(o) ? 'on' : ''}" data-multi="${esc(o)}">${esc(o)}</button>`).join('')}</div>
-      <p class="help" id="multicount">${sel.length} secildi (en az ${q.min}, en fazla ${q.max})</p>`;
+    input = `<div class="choices">${q.options.map((o) => {
+      const m = metaFor(o);
+      return `<button class="choice ${sel.includes(o) ? 'on' : ''} ${m && m.risk === 'yuksek' ? 'risky' : ''}" data-multi="${esc(o)}">
+        ${esc(o)} ${m ? riskBadge(m.risk) : ''}
+      </button>`;
+    }).join('')}</div>
+      <p class="help">${sel.length} secildi (en az ${q.min}, en fazla ${q.max})</p>
+      <div id="riskbox"></div>`;
   } else if (q.type === 'number') {
     input = `<input type="number" id="qinput" min="${q.min}" max="${q.max}" value="${value != null ? value : q.default}">`;
   } else if (q.type === 'measurements') {
@@ -156,19 +184,24 @@ async function renderWizard() {
     input = `<input type="text" id="qinput" maxlength="${q.maxLength || 60}" value="${esc(value || '')}" placeholder="bos birakabilirsin">`;
   }
 
+  const sectionIdx = S.questions.filter((x) => x.section === q.section).indexOf(q) + 1;
+  const sectionTotal = S.questions.filter((x) => x.section === q.section).length;
+
   view.innerHTML = `
     <div class="progress"><i style="width:${pct}%"></i></div>
     <div class="card">
-      <div class="stepnum">Soru ${S.step + 1} / ${total}</div>
+      <div class="stepnum">${esc(q.section || '')} · ${sectionIdx}/${sectionTotal} &nbsp;·&nbsp; toplam ${S.step + 1}/${total}</div>
       <h2 class="qtitle">${esc(q.label)}</h2>
       ${q.hint ? `<p class="qhint">${esc(q.hint)}</p>` : ''}
       ${input}
       <hr class="sep">
       <div class="row">
         <button class="ghost" id="back" ${S.step === 0 ? 'disabled' : ''}>Geri</button>
-        <button class="btn" id="next">${S.step === total - 1 ? 'Karakteri olustur' : 'Devam'}</button>
-        ${!q.required ? '<span class="dim" style="font-size:12px">bu soru opsiyonel</span>' : ''}
+        <button class="btn" id="next">${S.step === total - 1 ? 'Ozete gec' : 'Devam'}</button>
+        ${!q.required ? '<span class="dim" style="font-size:12px">opsiyonel</span>' : ''}
+        <button class="ghost" id="skiprest" style="margin-left:auto">Kalanini sen doldur →</button>
       </div>
+      <p class="help">"Kalanini sen doldur": geri kalan hayat sorularini verdigin cevaplarla tutarli sekilde otomasyon doldurur (gelir eve, ev ulasima, bolge sehre baglanir).</p>
     </div>`;
 
   view.querySelectorAll('[data-pick]').forEach((b) => {
@@ -180,21 +213,38 @@ async function renderWizard() {
       const v = b.dataset.multi;
       const i = sel.indexOf(v);
       if (i >= 0) sel.splice(i, 1);
+      else if (v === 'Yok') { S.answers[q.key] = []; return renderWizard(); }
       else if (sel.length < q.max) sel.push(v);
       else return toast(`En fazla ${q.max} secebilirsin.`, 'bad');
-      S.answers[q.key] = sel;
+      S.answers[q.key] = sel.filter((x) => x !== 'Yok');
       renderWizard();
     };
   });
 
+  // Riskli secim uyarisi
+  const riskbox = document.getElementById('riskbox');
+  if (riskbox && q.meta) {
+    const chosen = (Array.isArray(value) ? value : []).map(metaFor).filter((m) => m && m.risk !== 'dusuk');
+    riskbox.innerHTML = chosen.length
+      ? chosen.map((m) => `<div class="notice ${m.risk === 'yuksek' ? 'bad' : 'warn'}" style="margin-top:14px">
+          <b>${esc(m.value)} — ${m.risk === 'yuksek' ? 'yuksek risk' : 'orta risk'}</b><br>${esc(m.note)}
+        </div>`).join('')
+      : '';
+  }
+
   const back = document.getElementById('back');
   if (back) back.onclick = () => { S.step = Math.max(0, S.step - 1); renderWizard(); };
   document.getElementById('next').onclick = next;
+  document.getElementById('skiprest').onclick = () => { collect(); S.step = total; renderWizard(); };
 
   function collect() {
-    if (q.type === 'number' || q.type === 'text') {
-      const el = document.getElementById('qinput');
-      S.answers[q.key] = q.type === 'number' ? Number(el.value) : el.value;
+    if (q.type === 'number') {
+      S.answers[q.key] = Number(document.getElementById('qinput').value);
+    } else if (q.type === 'text') {
+      S.answers[q.key] = document.getElementById('qinput').value;
+    } else if (q.type === 'select-or-text') {
+      const typed = document.getElementById('qinput').value.trim();
+      if (typed) S.answers[q.key] = typed;
     } else if (q.type === 'measurements') {
       const out = {};
       view.querySelectorAll('[data-m]').forEach((el) => {
@@ -219,7 +269,7 @@ async function renderWizard() {
           if (f.required && (v == null || v[f.key] == null)) return toast(`${f.label} zorunlu.`, 'bad');
         }
       }
-      if (q.type === 'select' && !v) return toast('Bir secim yap.', 'bad');
+      if ((q.type === 'select' || q.type === 'select-or-text') && !v) return toast('Bir secim yap ya da kendin yaz.', 'bad');
     }
     S.step++;
     renderWizard();
@@ -227,22 +277,28 @@ async function renderWizard() {
 }
 
 function renderWizardSummary() {
-  const a = S.answers;
   const rows = S.questions.map((q) => {
-    let v = a[q.key];
+    let v = S.answers[q.key];
     if (q.type === 'measurements') {
       v = Object.entries(v || {}).map(([k, val]) => `${k.replace(/_/g, ' ')}: ${val}`).join(' · ');
     } else if (Array.isArray(v)) v = v.join(', ');
-    return `<div class="idcell"><span>${esc(q.label)}</span><b>${esc(v || '—')}</b></div>`;
+    return `<div class="idcell"><span>${esc(q.label)}</span><b>${esc(v || 'otomatik doldurulacak')}</b></div>`;
   }).join('');
+
+  const risky = (S.answers.distinctive || [])
+    .map((val) => (S.questions.find((q) => q.key === 'distinctive').meta || []).find((m) => m.value === val))
+    .filter((m) => m && m.risk !== 'dusuk');
 
   view.innerHTML = `
     <div class="progress"><i style="width:100%"></i></div>
+    ${risky.length ? risky.map((m) => `<div class="notice ${m.risk === 'yuksek' ? 'bad' : 'warn'}">
+      <b>Uyari — ${esc(m.value)}</b><br>${esc(m.note)}
+    </div>`).join('') : ''}
     <div class="card">
       <h1>Karakteri kilitliyoruz</h1>
       <p class="lead">Asagidaki kimlik <b>bir daha degistirilemez</b>. Her gorsel uretiminde kelimesi kelimesine
-      ayni sekilde prompt'a girecek - tutarliligin sebebi bu. Degistirmek istersen Ayarlar &gt; TUM VERIYI SIL ile
-      sifirdan baslarsin.</p>
+      ayni sekilde prompt'a girecek - tutarliligin sebebi bu. Bos biraktigin hayat sorulari, verdigin cevaplarla
+      tutarli sekilde otomatik doldurulur. Degistirmek istersen tek yol: Ayarlar &gt; TUM VERIYI SIL.</p>
       <div class="identity">${rows}</div>
       <hr class="sep">
       <div class="row">
@@ -258,8 +314,8 @@ function renderWizardSummary() {
     try {
       await api('/api/karakter', { answers: S.answers });
       await refresh();
-      S.tab = 'karakter';
-      toast('Karakter olusturuldu ve kilitlendi.', 'ok');
+      S.tab = 'vesikalik';
+      toast('Karakter olusturuldu ve kilitlendi. Simdi vesikalik setini uretelim.', 'ok');
       render();
     } catch (err) {
       toast(err.message, 'bad');
@@ -269,13 +325,16 @@ function renderWizardSummary() {
   };
 }
 
-/* -------------------------------------------------------------- character */
+/* -------------------------------------------------------------- dossier */
 
-function renderCharacter() {
+function renderDossier() {
   const c = S.status.character;
   const id = c.identity;
   const p = c.persona;
+  const l = c.life || {};
   const m = id.measurements || {};
+  const risks = S.status.risks || [];
+  const ref = S.status.reference;
 
   const cell = (label, value) => `<div class="idcell"><span>${esc(label)}</span><b>${esc(value || '—')}</b></div>`;
 
@@ -283,8 +342,17 @@ function renderCharacter() {
     <h1>${esc(id.name)} <span class="dim">@${esc(id.handle)}</span></h1>
     <p class="lead">
       <span class="locked">🔒 Kimlik kilitli</span> · seed <span class="mono">${c.seed}</span> ·
-      olusturuldu ${new Date(c.createdAt).toLocaleString('tr-TR')}
+      ${esc(l.city || '')} · olusturuldu ${new Date(c.createdAt).toLocaleString('tr-TR')}
     </p>
+
+    ${risks.length ? risks.map((r) => `<div class="notice ${r.risk === 'yuksek' ? 'bad' : 'warn'}">
+      <b>${esc(r.value)} — ${r.risk === 'yuksek' ? 'yuksek risk' : 'orta risk'}</b><br>${esc(r.note)}
+    </div>`).join('') : ''}
+
+    ${ref && !ref.complete ? `<div class="notice warn">
+      <b>Vesikalik seti eksik (${ref.done}/${ref.total}).</b> Icerik uretmeden once 8 acilik vesikaligi
+      tamamla - yuz tutarliligini en cok yukselten adim budur.
+    </div>` : ''}
 
     <div class="card">
       <h2>Kilitli kimlik</h2>
@@ -299,7 +367,39 @@ function renderCharacter() {
         ${cell('Vucut tipi', id.bodyType)}
         ${cell('Boy / kilo', `${m.height_cm || '—'} cm · ${m.weight_kg || '—'} kg`)}
         ${cell('Olculer', m.bust_cm ? `${m.bust_cm}-${m.waist_cm || '?'}-${m.hips_cm || '?'}` : '—')}
-        ${cell('Ayirt edici', id.distinctive)}
+        ${cell('Ayirt edici', (id.distinctive || []).join(', ') || 'Yok')}
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Karakter dosyasi</h2>
+      <p class="help">Caption yazarken, marka isbirligi degerlendirirken ve icerik planlarken tek referans nokta.</p>
+      <div class="dossier">${esc(c.dossier || '').split('\n\n').map((par) => `<p>${esc(par)}</p>`).join('')}</div>
+    </div>
+
+    <div class="card">
+      <h2>Hayat</h2>
+      <div class="identity">
+        ${cell('Yasadigi sehir', l.city)}
+        ${cell('Memleket', l.hometown)}
+        ${cell('Sosyoekonomik koken', l.socioeconomic)}
+        ${cell('Baba', l.fatherJob)}
+        ${cell('Anne', l.motherJob)}
+        ${cell('Kardes', l.siblings)}
+        ${cell('Iliski', l.maritalStatus)}
+        ${cell('Cocuk', l.children)}
+        ${cell('Meslek', l.occupation)}
+        ${cell('Gelir', l.income)}
+        ${cell('Ev', l.home)}
+        ${cell('Evcil hayvan', l.pet)}
+        ${cell('Ulasim', l.transport)}
+        ${cell('Diller', (l.languages || []).join(', '))}
+        ${cell('Gunluk ritim', l.routine)}
+        ${cell('Donum noktasi', l.definingEvent)}
+        ${cell('Korkusu', l.fear)}
+        ${cell('Hayali', l.dream)}
+        ${cell('Degeri', l.values)}
+        ${cell('Muzik', l.musicTaste)}
       </div>
     </div>
 
@@ -307,9 +407,7 @@ function renderCharacter() {
       <h2>Fiziksel cekirdek</h2>
       <p class="help">Her prompt'a AYNEN bu satir girer. Tutarliligin %70'i budur.</p>
       <div class="core">${esc(S.status.identityLine)}</div>
-      <div class="row" style="margin-top:12px">
-        <button class="ghost" id="copycore">Kopyala</button>
-      </div>
+      <div class="row" style="margin-top:12px"><button class="ghost" id="copycore">Kopyala</button></div>
     </div>
 
     <div class="grid2">
@@ -319,11 +417,10 @@ function renderCharacter() {
         <div class="field"><label>Ozellikler</label>${p.traits.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>
         <div class="field"><label>Konusma tonu</label>${esc(p.tone)}</div>
         <div class="field"><label>Imza kancasi</label>${esc(p.signatureHook)}</div>
-        <div class="field"><label>Gorsel ruh hali</label>${esc(p.visualMood)}</div>
       </div>
       <div class="card">
         <h2>Ses rehberi</h2>
-        <div class="field"><label>Egitim / dil kaydi</label>${esc(p.voiceGuide.register)}</div>
+        <div class="field"><label>Dil kaydi</label>${esc(p.voiceGuide.register)}</div>
         <div class="field"><label>Cumle uzunlugu</label>${esc(p.voiceGuide.sentenceLength)}</div>
         <div class="field"><label>Emoji kurali</label>${esc(p.voiceGuide.emojiRule)}</div>
         <div class="field"><label>Kacinilacaklar</label>${p.voiceGuide.avoid.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>
@@ -331,44 +428,132 @@ function renderCharacter() {
     </div>
 
     <div class="card">
-      <h2>Hikaye</h2>
-      <p>${esc(p.backstory)}</p>
-      <hr class="sep">
       <h3>Icerik sutunlari</h3>
       <div>${p.contentPillars.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>
-    </div>
-
-    <div class="card">
-      <h2>Altin kare (referans gorsel)</h2>
-      ${c.reference && c.reference.filename
-        ? `<div class="row" style="align-items:flex-start">
-             <img src="/gorseller/${esc(c.reference.filename)}" style="width:150px;border-radius:10px">
-             <div>
-               <p class="help">Bu gorsel, referans destekleyen platformlarda yuz kilidi olarak gonderiliyor.</p>
-               <div class="field" style="max-width:420px">
-                 <label>Herkese acik URL (Midjourney --cref / Higgsfield icin)</label>
-                 <input id="refurl" value="${esc(c.reference.publicUrl || '')}" placeholder="https://...">
-                 <p class="help">Bu gorseli internete yukleyip linkini buraya koyarsan, link gerektiren platformlarin prompt'una otomatik eklenir.</p>
-               </div>
-               <button class="ghost" id="saveref">Kaydet</button>
-             </div>
-           </div>`
-        : `<p class="dim">Henuz altin kare secilmedi. Galeriden en iyi gorseli "altin kare yap" ile isaretle;
-           bundan sonraki uretimlerde referans olarak kullanilir.</p>`}
     </div>`;
 
   document.getElementById('copycore').onclick = () => copy(S.status.identityLine);
-  const saveref = document.getElementById('saveref');
-  if (saveref) {
-    saveref.onclick = async () => {
-      await api('/api/karakter/persona', { publicReferenceUrl: document.getElementById('refurl').value });
-      await refresh();
-      toast('Kaydedildi.', 'ok');
-    };
-  }
 }
 
-/* -------------------------------------------------------------- production */
+/* ------------------------------------------------------------ vesikalik */
+
+async function renderReference() {
+  const data = await api('/api/referans');
+  const st = data.status;
+  const generates = S.status.provider.generates;
+
+  view.innerHTML = `
+    <h1>Vesikalik seti</h1>
+    <p class="lead">Karakter yaratildiktan sonraki <b>ilk is</b>. Yuzun 8 acidan vesikaligi cikarilir;
+    bundan sonraki her uretimde referans olarak kullanilir. Tek bir kare yuzu sadece o acidan tanimlar -
+    model karakteri yandan gostermek istediginde tahmin etmeye baslar ve yuz kayar. Bu set onu engeller.</p>
+
+    <div class="notice info">
+      <b>8 karede degisen tek sey acidir.</b> Kiyafet (duz beyaz tisort), arka plan (duz acik gri),
+      isik ve ifade birebir ayni tutulur. Degisen her ek degisken yuzu kaydirir.
+      Bu set ayni zamanda LoRA egitimi veya platformda "karakter" olusturmak icin gereken minimum veri setidir.
+    </div>
+
+    ${!generates ? `<div class="notice warn">
+      <b>Uretici bagli degil.</b> Ayarlar'dan bir platform sec - varsayilan <b>Pollinations.ai ucretsiz ve
+      anahtar istemiyor</b>. Ya da asagidan 8 prompt'u alip kendi aracinda uret, sonuclari elle ekle.
+    </div>` : ''}
+
+    ${generates && !S.status.provider.supportsReference ? `<div class="notice warn">
+      <b>Dikkat: ${esc(S.status.provider.label)} referans gorsel kabul etmiyor.</b><br>
+      Vesikaliklar uretilir ama platforma geri gonderilemez - bu yuzden acilar arasinda yuz, sac uzunlugu
+      ve detaylar kayabilir. Yuzu <b>gercekten</b> kilitlemek icin referans destekleyen bir platform gerekir:
+      Replicate veya fal.ai (IP-Adapter / redux modelleri), yerel ComfyUI (IPAdapter FaceID) veya
+      "Ozel API" ile karakter referansi destekleyen bir servis. Ucretsiz secenek isin yapisini kurar,
+      yuzu tam kilitlemez.
+    </div>` : ''}
+
+    <div class="card">
+      <div class="row">
+        <button class="btn" id="genall" ${!generates ? 'disabled' : ''}>
+          ${st.complete ? 'Tumunu yeniden uret' : `Eksik ${st.missing.length} aciyi uret`}
+        </button>
+        <button class="ghost" id="prompts">8 prompt'u goster</button>
+        <span class="dim">${st.done}/${st.total} tamam</span>
+      </div>
+      <div class="progress" style="margin-top:14px"><i style="width:${Math.round((st.done / st.total) * 100)}%"></i></div>
+      <div id="refprogress"></div>
+    </div>
+
+    <div class="gallery" id="refgrid">
+      ${st.angles.map((a) => `
+        <div class="shot ${a.isPrimary ? 'golden' : ''}">
+          ${a.shot
+            ? `<img src="${esc(a.shot.url)}" loading="lazy">`
+            : `<div class="placeholder">${esc(a.label)}<br><span class="dim">uretilmedi</span></div>`}
+          <div class="meta">
+            <b>${esc(a.label)}</b>${a.isPrimary ? ' <span class="badge">★ birincil</span>' : ''}
+            <div class="row" style="margin-top:8px">
+              <button class="ghost tiny" data-gen="${esc(a.key)}" ${!generates ? 'disabled' : ''}>
+                ${a.shot ? 'Yenile' : 'Uret'}
+              </button>
+              ${a.shot ? `<button class="ghost tiny" data-primary="${esc(a.key)}">Birincil yap</button>` : ''}
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+
+  view.querySelectorAll('[data-gen]').forEach((b) => {
+    b.onclick = () => generateAngles([b.dataset.gen]);
+  });
+  view.querySelectorAll('[data-primary]').forEach((b) => {
+    b.onclick = async () => {
+      await api('/api/referans/birincil', { angle: b.dataset.primary });
+      await refresh();
+      renderReference();
+      toast('Birincil referans degistirildi.', 'ok');
+    };
+  });
+  document.getElementById('genall').onclick = () => {
+    const targets = st.complete ? st.angles.map((a) => a.key) : st.missing;
+    generateAngles(targets);
+  };
+  document.getElementById('prompts').onclick = async () => {
+    const { prompts } = await api('/api/referans/promptlar', {});
+    modal('Vesikalik promptlari', prompts.map((p) => `
+      <div class="field"><label>${esc(p.label)}</label>
+      <div class="core" style="max-height:120px;overflow:auto">${esc(p.built.prompt)}</div></div>`).join(''),
+    [
+      { label: 'Hepsini kopyala', onClick: () => copy(prompts.map((p) => `### ${p.label}\n${p.built.prompt}`).join('\n\n')) },
+      { label: 'Kapat', className: 'btn', onClick: closeModal },
+    ]);
+  };
+}
+
+async function generateAngles(keys) {
+  if (S.busy) return;
+  S.busy = true;
+  const box = document.getElementById('refprogress');
+  const btn = document.getElementById('genall');
+  if (btn) btn.disabled = true;
+
+  let done = 0;
+  for (const key of keys) {
+    box.innerHTML = `<p class="help"><span class="spin"></span>${esc(key)} uretiliyor... (${done}/${keys.length})</p>`;
+    try {
+      await api('/api/referans/uret', { angle: key });
+      done++;
+    } catch (err) {
+      box.innerHTML = `<div class="notice bad" style="margin-top:14px"><b>${esc(key)} uretilemedi.</b><br>${esc(err.message)}</div>`;
+      S.busy = false;
+      if (btn) btn.disabled = false;
+      toast(err.message.slice(0, 160), 'bad');
+      return;
+    }
+  }
+
+  S.busy = false;
+  await refresh();
+  await renderReference();
+  toast(`${done} vesikalik uretildi.`, 'ok');
+}
+
+/* ------------------------------------------------------------ production */
 
 async function renderProduction() {
   if (!S.scenes.length) {
@@ -377,21 +562,30 @@ async function renderProduction() {
     S.scene = S.scenes[0];
   }
   const generates = S.status.provider.generates;
+  const ref = S.status.reference;
 
   view.innerHTML = `
     <h1>Uretim</h1>
     <p class="lead">Kimlik sabit; degisen tek sey poz, kiyafet, ortam ve isik.
     Gorsel <b>bagladigin API'den</b> gelir - bu otomasyonun kendi gorsel havuzu yoktur.</p>
 
-    ${generates ? '' : `<div class="notice warn">
-      <b>Bagli gorsel uretim API'si yok.</b><br>
-      Bu otomasyon kendi basina gorsel uretmez ve stok gorsel kullanmaz. Asagida prompt'u hazir goreceksin,
-      ama gorseli almak icin <b>Ayarlar</b> bolumunden kendi uretim platformunu baglaman gerekiyor
-      (Leonardo, OpenAI, Stability, Replicate, fal.ai, yerel Stable Diffusion, ComfyUI veya "Ozel API" ile herhangi biri).
-    </div>`}
+    ${ref && !ref.complete ? `<div class="notice warn">
+      <b>Vesikalik seti eksik (${ref.done}/${ref.total}).</b> Once onu tamamlaman tutarliligi ciddi artirir.
+    </div>` : ''}
 
     <div class="card">
-      <h2>Sahne</h2>
+      <h2>Ne yapmasini istiyorsun?</h2>
+      <p class="help">Serbest yaz: "kahve reklami yap", "spor salonunda foto", "sokakta kombin cekimi",
+      "otel isbirligi". Otomasyon bunu karakterin sehrine, gelirine ve gardirobuna uygun bir sahneye cevirir.</p>
+      <div class="row">
+        <input id="brieftext" placeholder="orn. kahve reklami yap" style="flex:1;min-width:260px">
+        <button class="ghost" id="briefgo">Sahneye cevir</button>
+      </div>
+      <div id="briefout"></div>
+    </div>
+
+    <div class="card">
+      <h2>Ya da hazir sahnelerden sec</h2>
       <div class="choices" id="scenelist">
         ${S.scenes.map((s, i) => `<button class="choice ${S.scene && S.scene.id === s.id ? 'on' : ''}" data-scene="${i}">
           <b>${esc(s.categoryLabel)}</b><br><span class="dim" style="font-size:12px">${esc(s.pose)}</span>
@@ -414,7 +608,7 @@ async function renderProduction() {
             <option value="wide">Yatay (16:9)</option>
           </select>
         </div>
-        <div class="field"><label>Ek detay (opsiyonel)</label><input id="f_extra" placeholder="istedigin ekstra tarif"></div>
+        <div class="field"><label>Ek detay</label><input id="f_extra" value="${esc(S.scene.extra || '')}" placeholder="istedigin ekstra tarif"></div>
         <div class="field"><label>Kac adet</label><input id="f_count" type="number" min="1" max="4" value="1"></div>
       </div>
       <div class="row">
@@ -431,12 +625,28 @@ async function renderProduction() {
   view.querySelectorAll('[data-scene]').forEach((b) => {
     b.onclick = () => { S.scene = S.scenes[Number(b.dataset.scene)]; renderProduction(); };
   });
-  document.getElementById('reroll').onclick = async () => {
-    S.scenes = [];
-    await renderProduction();
-  };
+  document.getElementById('reroll').onclick = async () => { S.scenes = []; await renderProduction(); };
   document.getElementById('preview').onclick = () => showPrompts(currentScene());
   document.getElementById('gen').onclick = () => generate(currentScene());
+
+  document.getElementById('briefgo').onclick = async () => {
+    const text = document.getElementById('brieftext').value.trim();
+    if (!text) return toast('Once ne istedigini yaz.', 'bad');
+    const out = document.getElementById('briefout');
+    out.innerHTML = '<p class="help"><span class="spin"></span>sahne kuruluyor...</p>';
+    try {
+      const data = await api('/api/brief', { text });
+      S.scene = data.scene;
+      S.scenes = [data.scene, ...S.scenes.filter((s) => s.category !== 'brief')];
+      await renderProduction();
+      document.getElementById('brieftext').value = text;
+      document.getElementById('briefout').innerHTML =
+        `<div class="notice info" style="margin-top:14px"><b>Sahne hazir: ${esc(data.scene.categoryLabel)}</b><br>
+         Asagidaki alanlar dolduruldu. Istersen elle degistir, sonra URET'e bas.</div>`;
+    } catch (err) {
+      out.innerHTML = `<div class="notice bad" style="margin-top:14px">${esc(err.message)}</div>`;
+    }
+  };
 
   function currentScene() {
     return {
@@ -461,7 +671,7 @@ async function showPrompts(scene) {
 }
 
 function renderPromptCards(container, data) {
-  const entries = Object.entries(data.all);
+  const entries = Object.entries(data.all || {});
   container.innerHTML = `
     <div class="card">
       <h2>Aktif platform icin prompt</h2>
@@ -474,17 +684,15 @@ function renderPromptCards(container, data) {
       ${data.active.negative ? `<div class="field" style="margin-top:14px"><label>Negatif prompt</label><div class="core">${esc(data.active.negative)}</div></div>` : ''}
       ${data.active.notes && data.active.notes.length ? `<ul class="help">${data.active.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
     </div>
-
-    <div class="card">
+    ${entries.length ? `<div class="card">
       <h2>Diger platformlarin dili</h2>
-      <p class="help">Ayni sahne, her aracin sevdigi bicimde. Hangisini kullaniyorsan onu kopyala.</p>
       ${entries.map(([key, v]) => `
         <div class="field">
           <label>${esc(v.dialectLabel)}</label>
           <div class="core">${esc(v.prompt)}</div>
           <div class="row" style="margin-top:8px"><button class="ghost" data-copyd="${key}">Kopyala</button></div>
         </div>`).join('')}
-    </div>`;
+    </div>` : ''}`;
 
   container.querySelector('[data-copy="active"]').onclick = () => copy(data.active.prompt);
   const negBtn = container.querySelector('[data-copy="neg"]');
@@ -504,7 +712,7 @@ async function generate(scene) {
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span>uretiliyor...';
   out.innerHTML = `<div class="card"><span class="spin"></span>
-    ${esc(S.status.provider.label)} calisiyor. Model ve kuyruga gore 10 saniye - 2 dakika surebilir.</div>`;
+    ${esc(S.status.provider.label)} calisiyor...</div>`;
 
   try {
     const data = await api('/api/uret', { scene, count });
@@ -513,20 +721,11 @@ async function generate(scene) {
         <h2>Uretildi · ${data.images.length} gorsel · ${(data.tookMs / 1000).toFixed(1)} sn</h2>
         <p class="help">Kaynak: ${esc(data.provider.label)} · seed ${data.prompt.seed != null ? data.prompt.seed : 'yok'}</p>
         <div class="gallery">${data.images.map((i) => `
-          <div class="shot">
-            <img src="${esc(i.url)}" loading="lazy">
-            <div class="meta">${esc(i.category || '')}<br>
-              <button class="ghost" style="margin-top:8px;padding:6px 10px;font-size:12px" data-golden="${esc(i.id)}">Altin kare yap</button>
-            </div>
+          <div class="shot"><img src="${esc(i.url)}" loading="lazy">
+            <div class="meta">${esc(i.category || '')}</div>
           </div>`).join('')}</div>
       </div>
-      <div class="card">
-        <h3>Kullanilan prompt</h3>
-        <div class="core">${esc(data.prompt.prompt)}</div>
-      </div>`;
-    out.querySelectorAll('[data-golden]').forEach((b) => {
-      b.onclick = () => setGolden(b.dataset.golden);
-    });
+      <div class="card"><h3>Kullanilan prompt</h3><div class="core">${esc(data.prompt.prompt)}</div></div>`;
     await refresh();
     toast(`${data.images.length} gorsel uretildi.`, 'ok');
   } catch (err) {
@@ -546,10 +745,57 @@ async function generate(scene) {
   }
 }
 
-async function setGolden(id) {
-  await api('/api/galeri/altin', { id });
-  await refresh();
-  toast('Altin kare secildi. Bundan sonraki uretimlerde referans olarak kullanilacak.', 'ok');
+/* ------------------------------------------------------------------ plan */
+
+async function renderPlan() {
+  if (!S.plan) S.plan = (await api('/api/plan')).plan;
+  const l = S.status.character.life || {};
+
+  view.innerHTML = `
+    <h1>Haftalik plan</h1>
+    <p class="lead">Karakterin gercek bir insan gibi haftasi. Gunluk ritmi (<b>${esc(l.routine || '')}</b>),
+    mesleği (<b>${esc(l.occupation || '')}</b>) ve ilgi alanlarindan uretildi.
+    Her gunun sahnesi hazir - "Uret" dedigin an bagli API'ye gider.</p>
+
+    <div class="grid2">
+      ${S.plan.map((d, i) => `
+        <div class="card">
+          <h3>${esc(d.day)} · ${esc(d.label)}</h3>
+          <p class="help">${esc(d.note)}</p>
+          <div class="core" style="max-height:90px;overflow:auto">${esc(d.scene.pose)} — ${esc(d.scene.setting)}</div>
+          <div class="row" style="margin-top:12px">
+            <button class="ghost tiny" data-planuret="${i}">Uret</button>
+            <button class="ghost tiny" data-planuretim="${i}">Uretim'e gonder</button>
+          </div>
+          <div id="planout${i}"></div>
+        </div>`).join('')}
+    </div>`;
+
+  view.querySelectorAll('[data-planuretim]').forEach((b) => {
+    b.onclick = () => {
+      S.scene = S.plan[Number(b.dataset.planuretim)].scene;
+      S.scenes = [S.scene, ...S.scenes];
+      S.tab = 'uretim';
+      render();
+    };
+  });
+  view.querySelectorAll('[data-planuret]').forEach((b) => {
+    b.onclick = async () => {
+      const i = Number(b.dataset.planuret);
+      const box = document.getElementById(`planout${i}`);
+      b.disabled = true;
+      box.innerHTML = '<p class="help"><span class="spin"></span>uretiliyor...</p>';
+      try {
+        const data = await api('/api/uret', { scene: S.plan[i].scene, count: 1 });
+        box.innerHTML = `<div class="gallery" style="margin-top:12px">${data.images.map((im) =>
+          `<div class="shot"><img src="${esc(im.url)}"></div>`).join('')}</div>`;
+      } catch (err) {
+        box.innerHTML = `<div class="notice bad" style="margin-top:12px">${esc(err.message)}</div>`;
+      } finally {
+        b.disabled = false;
+      }
+    };
+  });
 }
 
 /* ---------------------------------------------------------------- gallery */
@@ -558,26 +804,23 @@ function renderGallery() {
   const g = S.status.gallery;
   view.innerHTML = `
     <h1>Galeri</h1>
-    <p class="lead">Hepsi bagladigin uretim API'sinden geldi. En iyi kareyi "altin kare" yap;
-    referans destekleyen platformlarda yuz kilidi olarak kullanilir.</p>
+    <p class="lead">Hepsi bagladigin uretim API'sinden geldi.</p>
     ${g.length ? `<div class="gallery">${g.map((i) => `
       <div class="shot ${i.isGolden ? 'golden' : ''}">
         <img src="${esc(i.url)}" loading="lazy">
         <div class="meta">
-          ${i.isGolden ? '<span class="badge">★ altin kare</span><br>' : ''}
+          ${i.isGolden ? '<span class="badge">★ birincil referans</span><br>' : ''}
           ${esc(i.category || '')} · ${esc(i.providerLabel || i.provider || '')}<br>
           ${new Date(i.createdAt).toLocaleString('tr-TR')}
           <div class="row" style="margin-top:8px">
-            <button class="ghost" style="padding:5px 9px;font-size:11.5px" data-golden="${esc(i.id)}">Altin kare</button>
-            <button class="ghost" style="padding:5px 9px;font-size:11.5px" data-prompt="${esc(i.id)}">Prompt</button>
+            <button class="ghost tiny" data-prompt="${esc(i.id)}">Prompt</button>
           </div>
         </div>
       </div>`).join('')}</div>`
       : `<div class="empty">Henuz gorsel yok.<br><br>
          <span class="dim">Bu otomasyon gorsel uretmez ve stok gorsel kullanmaz -
-         Ayarlar'dan bir uretim API'si baglayip Uretim sekmesinden ilk kareyi al.</span></div>`}`;
+         once vesikalik setini uret.</span></div>`}`;
 
-  view.querySelectorAll('[data-golden]').forEach((b) => { b.onclick = () => setGolden(b.dataset.golden); });
   view.querySelectorAll('[data-prompt]').forEach((b) => {
     b.onclick = () => {
       const item = g.find((i) => i.id === b.dataset.prompt);
@@ -603,9 +846,9 @@ function renderSettings() {
 
     <div class="notice info">
       <b>Bu otomasyon gorsel uretmez.</b> Hicbir stok gorsel de icermez.
-      Gorseli <b>senin bagladigin platform</b> uretir; otomasyonun isi, kilitli karakterden o platformun
-      diline gore en iyi prompt'u kurup istegi gondermek ve donen gorseli kaydetmektir.
-      Listede olmayan bir platform kullaniyorsan <b>"Ozel API"</b> secenegiyle herhangi birini baglayabilirsin.
+      Gorseli <b>bagli platform</b> uretir. Varsayilan olarak <b>Pollinations.ai</b> secilidir:
+      ucretsiz, API anahtari istemez, kurulumdan hemen sonra calisir.
+      Kaliteyi yukseltmek istersen kendi platformunu bagla; listede olmayan her sey icin <b>"Ozel API"</b> var.
     </div>
 
     <div class="card">
@@ -617,7 +860,7 @@ function renderSettings() {
             ${esc(p.label)}${p.local ? ' (yerel)' : ''}${p.configured || p.id === 'manual' ? '' : ' — ayarlanmadi'}
           </option>`).join('')}
         </select>
-        <p class="help" id="provblurb">${esc(spec.blurb || '')}</p>
+        <p class="help">${esc(spec.blurb || '')}</p>
         ${spec.docs ? `<p class="help">Dokuman: <a href="${esc(spec.docs)}" target="_blank" rel="noreferrer">${esc(spec.docs)}</a></p>` : ''}
       </div>
       <div id="provfields"></div>
@@ -625,17 +868,15 @@ function renderSettings() {
         <button class="btn" id="savep">Kaydet</button>
         <button class="ghost" id="testp" ${spec.id === 'manual' ? 'disabled' : ''}>Baglantiyi test et</button>
       </div>
-      <p class="help">Anahtarlar sadece bu bilgisayarda <span class="mono">data/providers.json</span> icinde tutulur; hicbir yere gonderilmez ve repoya girmez.</p>
+      <p class="help">Anahtarlar sadece bu bilgisayarda <span class="mono">data/providers.json</span> icinde tutulur.</p>
       <div id="testout"></div>
     </div>
 
     <div class="card">
       <h2 style="color:#ff8fa3">TUM VERIYI SIL</h2>
-      <p class="lead">Karakteri ve uretilen tum gorselleri kaldirir, sihirbaz sifirdan baslar.
-      Karakter bir kez kilitlendigi icin yeni bir kisi yaratmanin tek yolu budur.</p>
-      <div class="row">
-        <button class="danger ghost" id="wipe">TUM VERIYI SIL</button>
-      </div>
+      <p class="lead">Karakteri, vesikalik setini ve uretilen tum gorselleri kaldirir; sihirbaz sifirdan baslar.
+      Karakter bir kez kilitlendigi icin yeni bir insan yaratmanin tek yolu budur.</p>
+      <div class="row"><button class="danger ghost" id="wipe">TUM VERIYI SIL</button></div>
       <p class="help">Komut satirindan: <span class="mono">node reset.js --confirm</span></p>
     </div>`;
 
@@ -691,7 +932,7 @@ function renderSettings() {
 
   document.getElementById('wipe').onclick = () => {
     modal('TUM VERIYI SIL', `
-      <p>Karakter, galeri ve tum uretilen gorseller kaldirilacak. Sihirbaz sifirdan baslayacak.</p>
+      <p>Karakter, vesikalik seti, galeri ve tum uretilen gorseller kaldirilacak.</p>
       <div class="field"><label>Onaylamak icin kutuya <b>SIFIRLA</b> yaz</label><input id="wipeconfirm" placeholder="SIFIRLA"></div>
       <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
         <input type="checkbox" id="wipehard" style="width:auto"> Kalici sil (arsivleme, geri alinamaz)
@@ -712,7 +953,8 @@ function renderSettings() {
               keepProviders: !document.getElementById('wipekeys').checked,
             });
             closeModal();
-            S.answers = {}; S.step = 0; S.scenes = []; S.scene = null; S.tab = 'kurulum';
+            S.answers = {}; S.step = 0; S.scenes = []; S.scene = null; S.plan = null;
+            S.questions = []; S.questionsRegion = null; S.tab = 'kurulum';
             await refresh();
             toast(data.message, 'ok');
             render();
@@ -727,7 +969,7 @@ function renderSettings() {
   function drawFields(p) {
     const box = document.getElementById('provfields');
     if (!p.fields.length) {
-      box.innerHTML = '<p class="dim">Bu secenekte ayar yok.</p>';
+      box.innerHTML = '<p class="dim">Bu secenekte ayar yok - dogrudan kullanabilirsin.</p>';
       return;
     }
     box.innerHTML = p.fields.map((f) => {
@@ -751,7 +993,7 @@ function renderSettings() {
           ${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}${maskedNote}</div>`;
       }
       return `<div class="field"><label>${esc(f.label)}${f.required ? ' *' : ''}</label>
-        <input id="pf_${f.key}" type="${f.type === 'password' ? 'text' : (f.type === 'number' ? 'number' : 'text')}"
+        <input id="pf_${f.key}" type="${f.type === 'number' ? 'number' : 'text'}"
                value="${esc(val)}" ${f.type === 'password' ? 'autocomplete="off" spellcheck="false"' : ''}>
         ${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}${maskedNote}</div>`;
     }).join('');
@@ -763,7 +1005,7 @@ function renderSettings() {
 (async function init() {
   try {
     await refresh();
-    S.tab = S.status.hasCharacter ? 'karakter' : 'kurulum';
+    S.tab = S.status.hasCharacter ? 'dosya' : 'kurulum';
     render();
   } catch (err) {
     view.innerHTML = `<div class="notice bad">Panel yuklenemedi: ${esc(err.message)}</div>`;

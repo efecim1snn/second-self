@@ -121,21 +121,8 @@ const BODY = {
   'Balikci / iri yapili': 'broad sturdy build',
 };
 
-const DISTINCTIVE = {
-  'Yok': '',
-  'Ciller': 'light freckles across the nose and cheeks',
-  'Ben (yuzde)': 'a small beauty mark above the lip',
-  'Gozluk': 'thin round glasses',
-  'Dovme (kol)': 'a fine-line tattoo on the forearm',
-  'Dovme (boyun)': 'a small tattoo on the side of the neck',
-  'Piercing (burun)': 'a tiny nose stud',
-  'Piercing (kulak)': 'stacked ear piercings',
-  'Belirgin kaslar': 'strong defined eyebrows',
-  'Gamze': 'dimples when smiling',
-  'Heterokromi (farkli renkte gozler)': 'heterochromia, one eye a different colour',
-  'Beyaz sac tutami': 'a single white streak in the hair',
-  'Boyun kolyesi (sabit)': 'a signature thin chain necklace always worn',
-};
+// Ayirt edici ozelliklerin Ingilizce tarifleri ve risk seviyeleri src/traits.js'te.
+const traits = require('./traits');
 
 /* ---------------------------------------------------------- negatif liste */
 
@@ -150,6 +137,16 @@ const NEGATIVE = [
   'cartoon', 'anime', '3d render', 'cgi', 'illustration', 'painting',
 ];
 
+/**
+ * Riskli ozellikler secildiginde negatif listeye eklenenler.
+ * Negatif prompt tutarliligi tam cozmez ama en sik goruleni (cilin lekeye
+ * donusmesi, dovmenin bulaniklasmasi) belirgin sekilde azaltir.
+ */
+const RISK_NEGATIVE = {
+  freckles: ['blotchy skin', 'skin blemishes', 'acne', 'smudged freckles', 'muddy skin tone', 'dirt on face'],
+  tattoo: ['blurry tattoo', 'smudged tattoo', 'illegible tattoo text', 'random tattoos', 'tattoo sleeve', 'body covered in tattoos'],
+};
+
 const QUALITY = {
   photo: [
     'photorealistic', 'natural skin texture with visible pores', 'candid photograph',
@@ -159,6 +156,12 @@ const QUALITY = {
   editorial: [
     'editorial fashion photograph', 'studio quality', 'natural skin texture',
     'shot on medium format camera', 'sharp focus', 'high detail',
+  ],
+  // Vesikalik seti: kimligi tanimlayan kare. Sanatsal hicbir sey istemiyoruz.
+  reference: [
+    'photorealistic', 'natural skin texture with visible pores', 'sharp focus across the whole face',
+    'evenly lit', 'no makeup styling', 'no jewellery', 'no accessories',
+    'shot on 85mm lens at f/8', 'full face in focus', 'high detail', 'identification photo',
   ],
 };
 
@@ -174,7 +177,22 @@ const ASPECT = {
 /**
  * Kimligin degismez tarifi. Her prompt'a AYNEN girer.
  */
-function physicalCore(identity) {
+/** Ayirt edici ozellik alani hem eski (metin) hem yeni (dizi) bicimi kabul eder. */
+function distinctiveList(identity) {
+  const raw = identity.distinctive;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string' && raw && raw !== 'Yok') return [raw];
+  return [];
+}
+
+/**
+ * @param {object} options
+ *   short=true      -> vucut/boy/olcu atlanir (bas-omuz kadrajinda anlamsiz ve
+ *                      prompt'u sulandirir)
+ *   facialOnly=true -> sadece kadrajda gorunebilen ozellikler (bilek dovmesi
+ *                      vesikalikta gorunmez; birakilirsa model uydurur)
+ */
+function physicalCore(identity, options = {}) {
   const gender = GENDER[identity.gender] || 'person';
   const ethnicity = ETHNICITY[identity.ethnicity] || identity.ethnicity;
   const region = REGION[identity.region] || identity.region;
@@ -182,7 +200,15 @@ function physicalCore(identity) {
   const eyes = EYES[identity.eyeColor] || identity.eyeColor;
   const hair = `${HAIR_STYLE[identity.hairStyle] || identity.hairStyle} ${HAIR_COLOR[identity.hairColor] || identity.hairColor} hair`;
   const body = BODY[identity.bodyType] || identity.bodyType;
-  const mark = DISTINCTIVE[identity.distinctive] || '';
+  const list = distinctiveList(identity);
+  const marks = options.facialOnly ? traits.describeFacial(list) : traits.describe(list);
+
+  if (options.short) {
+    return [
+      `${identity.age}-year-old ${ethnicity} ${gender}`,
+      skin, eyes, hair, ...marks,
+    ].filter(Boolean).join(', ');
+  }
 
   const m = identity.measurements || {};
   const stature = [];
@@ -191,18 +217,76 @@ function physicalCore(identity) {
     stature.push(`${m.bust_cm}-${m.waist_cm}-${m.hips_cm} proportions`);
   }
 
+  // DIKKAT: bolge tarifi bilerek DISARIDA birakildi.
+  // "Mediterranean coast heritage" gibi ifadelerdeki mekan kelimeleri
+  // (coast, highlands) modeli sahneden kopararak plaja/dagliga cekiyordu.
+  // Gorunusu zaten etnik koken tasiyor; bolge karakter verisinde duruyor.
   const parts = [
     `${identity.age}-year-old ${ethnicity} ${gender}`,
-    `${region} heritage`,
     skin,
     eyes,
     hair,
     body,
     ...stature,
+    ...marks,
   ];
-  if (mark) parts.push(mark);
 
   return parts.filter(Boolean).join(', ');
+}
+
+/** Vesikalik icin ek negatifler: sahne/aksesuar sizmasini engeller. */
+const REFERENCE_NEGATIVE = [
+  'outdoor background', 'scenery', 'landscape', 'beach', 'sky', 'trees', 'street',
+  'busy background', 'patterned background', 'props', 'jewellery', 'hat', 'sunglasses',
+  'heavy makeup', 'full body', 'wide shot', 'multiple people', 'text overlay',
+];
+
+/** Secilen riskli ozelliklere gore negatif listeyi genisletir. */
+function negativeFor(identity, scene = {}) {
+  const list = distinctiveList(identity);
+  const extra = [];
+  if (traits.hasFreckles(list)) extra.push(...RISK_NEGATIVE.freckles);
+  if (traits.hasTattoo(list)) extra.push(...RISK_NEGATIVE.tattoo);
+  if (scene.style === 'reference') extra.push(...REFERENCE_NEGATIVE);
+  return [...NEGATIVE, ...extra].join(', ');
+}
+
+/**
+ * VESIKALIK PROMPTU - normal sahnelerden ayri kurulur.
+ *
+ * Neden ayri: gorsel modelleri prompt'un BASINDAKI kelimelere agirlik verir.
+ * Kisiyi anlatarak baslarsan "duz gri stüdyo arka plani" talimati sonda kalir
+ * ve model karakteri plaja, sokaga, nereye isterse koyar. Burada once FORMAT
+ * soylenir, kisi sonra gelir.
+ */
+function buildReferencePrompt(identity, scene, dialect) {
+  const core = physicalCore(identity, { short: true, facialOnly: true });
+  const naturalLanguage = ['flux', 'dalle', 'leonardo', 'higgsfield', 'generic'].includes(dialect);
+
+  if (naturalLanguage) {
+    // Sira onemli: once format (arka plani sabitler), hemen ardindan KISI
+    // (kimligi yuksek agirlikta tutar), en sonda aci ve teknik detaylar.
+    return [
+      'A studio passport identification photograph taken against a plain, seamless light grey background.',
+      `The subject is a ${core}.`,
+      'Their hair length, hair style, eye colour and facial features must stay exactly as described above.',
+      `${capitalise(scene.shot)}.`,
+      `${capitalise(scene.pose)}.`,
+      'They are wearing a plain white crew-neck t-shirt.',
+      'Flat, even studio lighting with no harsh shadows and no coloured light.',
+      'Photorealistic, natural skin texture with visible pores, sharp focus across the whole face, high detail.',
+      'The background is completely empty - no scenery, no furniture, no props, no jewellery.',
+    ].join(' ');
+  }
+
+  // Etiket tabanli araclar (Midjourney, SDXL): format kelimeleri yine basta.
+  return [
+    'passport ID photograph', 'plain seamless light grey studio backdrop',
+    scene.shot, scene.pose,
+    core,
+    'plain white crew-neck t-shirt', 'flat even studio lighting', 'no shadows',
+    'photorealistic', 'natural skin texture with visible pores', 'sharp focus on the face', 'high detail',
+  ].filter(Boolean).join(', ');
 }
 
 /** Insan tarafindan okunabilir kisa ozet (panelde gosterilir) */
@@ -299,13 +383,24 @@ function withArticle(phrase) {
   return `${/^[aeiou]/i.test(text) ? 'an' : 'a'} ${text}`;
 }
 
+/**
+ * Poz zaten "holding ..." diyorsa aksesuari tekrar "holding" ile eklemek
+ * modeli sasirtiyor (iki ayri nesne sanip ikisini de dusuruyor).
+ */
+function propsPhrase(scene) {
+  if (!scene.props) return '';
+  const poseHasHold = /\bholding\b/i.test(scene.pose || '');
+  return poseHasHold ? `with ${scene.props} clearly in frame` : `holding ${scene.props}`;
+}
+
 function sceneWords(scene) {
   const bits = [];
   if (scene.shot) bits.push(scene.shot);
   if (scene.outfit) bits.push(`wearing ${scene.outfit}`);
   if (scene.pose) bits.push(scene.pose);
   if (scene.setting) bits.push(`in ${scene.setting}`);
-  if (scene.props) bits.push(`holding ${scene.props}`);
+  const props = propsPhrase(scene);
+  if (props) bits.push(props);
   if (scene.lighting) bits.push(scene.lighting);
   if (scene.mood) bits.push(`${scene.mood} mood`);
   return bits.filter(Boolean);
@@ -324,13 +419,46 @@ function build(character, scene = {}, dialect = 'generic') {
   const aspect = ASPECT[aspectKey];
   const seed = character.seed;
   const words = sceneWords(scene);
-  const quality = scene.style === 'editorial' ? QUALITY.editorial : QUALITY.photo;
+  const quality = QUALITY[scene.style] || QUALITY.photo;
   const extra = scene.extra ? String(scene.extra).trim() : '';
   const spec = DIALECTS[dialect] || DIALECTS.generic;
 
-  const negative = NEGATIVE.join(', ');
+  // Negatif liste, secilen riskli ozelliklere gore genisler (cil -> lekelenme,
+  // dovme -> bulanik/degisken desen) ve vesikalikta sahne sizmasini engeller.
+  const negative = negativeFor(identity, scene);
   let prompt;
   const params = {};
+
+  // Vesikalik: format-onde prompt, tum lehcelerde ayni mantik.
+  if (scene.style === 'reference') {
+    prompt = buildReferencePrompt(identity, scene, dialect);
+    if (dialect === 'midjourney') {
+      const flags = [`--ar ${aspect.mj}`, '--style raw', '--v 7', `--seed ${seed}`];
+      prompt = `${prompt} ${flags.join(' ')}`;
+    } else if (dialect === 'dalle') {
+      params.size = '1024x1024';
+    } else {
+      params.negative_prompt = negative;
+      params.seed = seed;
+      params.width = aspect.wh[0];
+      params.height = aspect.wh[1];
+    }
+    return {
+      dialect,
+      dialectLabel: spec.label,
+      prompt: prompt.replace(/\s+/g, ' ').trim(),
+      negative: spec.supportsNegative ? negative : null,
+      seed: spec.supportsSeed ? seed : null,
+      aspect: aspectKey,
+      aspectLabel: aspect.label,
+      width: aspect.wh[0],
+      height: aspect.wh[1],
+      params,
+      notes: spec.notes,
+      core,
+      isReference: true,
+    };
+  }
 
   switch (dialect) {
     case 'midjourney': {
@@ -377,12 +505,20 @@ function build(character, scene = {}, dialect = 'generic') {
     }
 
     case 'flux': {
+      // Once KADRAJ + MEKAN, sonra kisi, sonra eylem. Kisiyi anlatarak
+      // baslarsan model bunu bir portre istegi sanip mekani gormezden gelir.
       prompt = [
-        `A candid photograph of a ${core}.`,
-        words.length ? `${capitalise(words.join(', '))}.` : '',
-        'Natural skin texture with visible pores, realistic colour grading, shot on an 85mm lens with shallow depth of field, sharp focus on the eyes.',
-        extra,
-      ].filter(Boolean).join(' ');
+        `${capitalise(scene.shot || 'A candid photograph')}${scene.setting ? `, set in ${scene.setting}` : ''}.`,
+        `The subject is a ${core}.`,
+        [
+          scene.pose ? `They are ${scene.pose}` : '',
+          scene.outfit ? `wearing ${scene.outfit}` : '',
+          propsPhrase(scene),
+        ].filter(Boolean).join(', ') + '.',
+        scene.lighting ? `${capitalise(scene.lighting)}.` : '',
+        extra ? `${extra}.` : '',
+        'Photorealistic, natural skin texture with visible pores, realistic colour grading, shot on an 85mm lens, sharp focus on the eyes.',
+      ].filter((s) => s && s !== '.').join(' ');
       params.seed = seed;
       params.width = aspect.wh[0];
       params.height = aspect.wh[1];

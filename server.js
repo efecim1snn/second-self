@@ -18,8 +18,12 @@ const crypto = require('crypto');
 const store = require('./src/store');
 const wizard = require('./src/wizard');
 const persona = require('./src/persona');
+const life = require('./src/life');
+const traits = require('./src/traits');
 const promptcraft = require('./src/promptcraft');
 const scenes = require('./src/scenes');
+const reference = require('./src/reference');
+const brief = require('./src/brief');
 const providers = require('./src/providers');
 
 const PORT = Number(process.env.PORT || 4200);
@@ -154,6 +158,67 @@ function referencePayload(character) {
   return { referenceBase64: b64, referenceDataUri: `data:image/png;base64,${b64}` };
 }
 
+/**
+ * Ortak uretim yolu: sahne -> prompt -> bagli API -> kaydedilen gorseller.
+ * Hem normal uretim hem vesikalik seti bunu kullanir.
+ */
+async function generateScene(character, scene, count = 1) {
+  const { spec, config } = activeProvider();
+  const dialect = config.dialect || spec.dialect;
+  const built = promptcraft.build(character, scene, dialect);
+  const aspectMeta = promptcraft.ASPECT[built.aspect];
+
+  if (spec.id === 'manual') {
+    const err = new Error(
+      'Bagli bir gorsel uretim API\'si yok. Bu otomasyon kendi basina gorsel uretmez ve stok gorsel kullanmaz. ' +
+      'Ayarlar bolumunden bir platform sec - varsayilan Pollinations.ai ucretsizdir ve anahtar istemez. ' +
+      'Asagidaki prompt hazir; istersen simdilik elle kendi aracina yapistirabilirsin.'
+    );
+    err.status = 428;
+    err.payload = { prompt: built, all: promptcraft.buildAll(character, scene) };
+    throw err;
+  }
+
+  const started = Date.now();
+  const result = await spec.generate({
+    config,
+    prompt: built.prompt,
+    negative: built.negative,
+    seed: built.seed,
+    width: built.width,
+    height: built.height,
+    size: built.params.size || `${built.width}x${built.height}`,
+    aspectRatio: aspectMeta.mj,
+    count: Math.min(Math.max(Number(count) || 1, 1), 4),
+    ...(spec.supportsReference ? referencePayload(character) : {}),
+  });
+
+  const saved = [];
+  for (const image of result.images || []) {
+    const ext = image.mime === 'image/jpeg' ? 'jpg' : image.mime === 'image/webp' ? 'webp' : 'png';
+    const file = store.saveImageBuffer(image.buffer, ext);
+    const item = {
+      id: file.id,
+      filename: file.filename,
+      url: file.url,
+      createdAt: new Date().toISOString(),
+      provider: spec.id,
+      providerLabel: spec.label,
+      dialect,
+      prompt: built.prompt,
+      negative: built.negative,
+      seed: built.seed,
+      scene,
+      category: scene.categoryLabel || scene.category || null,
+      isGolden: false,
+    };
+    store.addGalleryItem(item);
+    saved.push(item);
+  }
+
+  return { images: saved, built, spec, tookMs: Date.now() - started };
+}
+
 /* ------------------------------------------------------------------ rotalar */
 
 const routes = {
@@ -169,12 +234,23 @@ const routes = {
         label: spec.label,
         generates: spec.id !== 'manual',
         dialect: (cfg.entries && cfg.entries[spec.id] && cfg.entries[spec.id].dialect) || spec.dialect,
+        supportsReference: !!spec.supportsReference,
       },
       identityLine: character ? promptcraft.identityLine(character.identity) : null,
+      reference: character ? reference.status(character) : null,
+      risks: character ? traits.risks(character.identity.distinctive) : [],
     };
   },
 
-  'GET /api/sorular': async () => ({ questions: wizard.QUESTIONS }),
+  'POST /api/sorular': async (body) => ({
+    questions: wizard.questionsFor(body.answers || {}),
+    sections: wizard.sections(),
+  }),
+
+  'GET /api/sorular': async () => ({
+    questions: wizard.questionsFor({}),
+    sections: wizard.sections(),
+  }),
 
   'POST /api/karakter': async (body) => {
     if (store.hasCharacter()) {
@@ -183,7 +259,12 @@ const routes = {
       throw err;
     }
 
-    const { ok, errors, clean } = wizard.validate(body.answers || {});
+    // Once bos birakilan HAYAT sorulari tutarli sekilde doldurulur, sonra
+    // dogrulama yapilir. Boylece kullanici "kalanini sen doldur" diyebilir;
+    // gorunus sorulari yine zorunlu kalir.
+    const submitted = life.autoFill(body.answers || {});
+
+    const { ok, errors, clean } = wizard.validate(submitted);
     if (!ok) {
       const err = new Error(errors.join(' '));
       err.status = 400;
@@ -207,22 +288,32 @@ const routes = {
       age: clean.age,
       bodyType: clean.bodyType,
       measurements: clean.measurements,
-      distinctive: clean.distinctive,
+      distinctive: clean.distinctive || [],
     };
 
+    const lifeBlock = wizard.extractLife({ ...clean, name });
+    const personaBlock = life.enrich(persona.build(clean, name), lifeBlock);
+
     const character = {
-      version: 1,
+      version: 2,
       characterId: `chr_${crypto.randomBytes(4).toString('hex')}`,
       createdAt: new Date().toISOString(),
       locked: true,
       seed: wizard.deriveSeed(identity),
       identity,
-      persona: persona.build(clean, name),
+      life: lifeBlock,
+      persona: personaBlock,
+      dossier: life.dossier(identity, lifeBlock, personaBlock),
+      referenceSet: {},
       reference: { filename: null, publicUrl: '', setAt: null },
     };
 
     store.saveCharacter(character);
-    return { character, identityLine: promptcraft.identityLine(identity) };
+    return {
+      character,
+      identityLine: promptcraft.identityLine(identity),
+      risks: traits.risks(identity.distinctive),
+    };
   },
 
   'POST /api/karakter/persona': async (body) => {
@@ -265,67 +356,104 @@ const routes = {
   'POST /api/uret': async (body) => {
     const character = store.getCharacter();
     if (!character) throw notFound('Once karakter yarat.');
-
-    const { spec, config } = activeProvider();
-    const scene = body.scene || {};
-    const dialect = config.dialect || spec.dialect;
-    const built = promptcraft.build(character, scene, dialect);
-    const aspectMeta = promptcraft.ASPECT[built.aspect];
-
-    if (spec.id === 'manual') {
-      const err = new Error(
-        'Bagli bir gorsel uretim API\'si yok. Bu otomasyon kendi basina gorsel uretmez ve stok gorsel kullanmaz. ' +
-        'Ayarlar bolumunden kullandigin platformu bagla (Leonardo, OpenAI, Stability, Replicate, fal.ai, yerel Stable Diffusion, ComfyUI veya Ozel API). ' +
-        'Asagidaki prompt hazir - istersen simdilik elle kendi aracina yapistirabilirsin.'
-      );
-      err.status = 428;
-      err.payload = { prompt: built, all: promptcraft.buildAll(character, scene) };
-      throw err;
-    }
-
-    const started = Date.now();
-    const result = await spec.generate({
-      config,
-      prompt: built.prompt,
-      negative: built.negative,
-      seed: built.seed,
-      width: built.width,
-      height: built.height,
-      size: built.params.size || `${built.width}x${built.height}`,
-      aspectRatio: aspectMeta.mj,
-      count: Math.min(Math.max(Number(body.count) || 1, 1), 4),
-      ...(spec.supportsReference ? referencePayload(character) : {}),
-    });
-
-    const saved = [];
-    for (const image of result.images || []) {
-      const ext = image.mime === 'image/jpeg' ? 'jpg' : image.mime === 'image/webp' ? 'webp' : 'png';
-      const file = store.saveImageBuffer(image.buffer, ext);
-      const item = {
-        id: file.id,
-        filename: file.filename,
-        url: file.url,
-        createdAt: new Date().toISOString(),
-        provider: spec.id,
-        providerLabel: spec.label,
-        dialect,
-        prompt: built.prompt,
-        negative: built.negative,
-        seed: built.seed,
-        scene,
-        category: scene.categoryLabel || scene.category || null,
-        isGolden: false,
-      };
-      store.addGalleryItem(item);
-      saved.push(item);
-    }
-
+    const out = await generateScene(character, body.scene || {}, body.count);
     return {
-      images: saved,
-      prompt: built,
-      provider: { id: spec.id, label: spec.label },
-      tookMs: Date.now() - started,
+      images: out.images,
+      prompt: out.built,
+      provider: { id: out.spec.id, label: out.spec.label },
+      tookMs: out.tookMs,
+      referenceMissing: !reference.status(character).complete,
     };
+  },
+
+  /* ------------------------------------------------------- vesikalik seti */
+
+  'GET /api/referans': async () => {
+    const character = store.getCharacter();
+    if (!character) throw notFound('Once karakter yarat.');
+    return { status: reference.status(character), angles: reference.list() };
+  },
+
+  'POST /api/referans/uret': async (body) => {
+    const character = store.getCharacter();
+    if (!character) throw notFound('Once karakter yarat.');
+    const scene = reference.sceneFor(body.angle);
+    if (!scene) throw badRequest('Bilinmeyen aci.');
+
+    const out = await generateScene(character, scene, 1);
+    const image = out.images[0];
+    if (!image) throw new Error('Vesikalik uretilemedi.');
+
+    const fresh = store.getCharacter();
+    fresh.referenceSet = fresh.referenceSet || {};
+    fresh.referenceSet[body.angle] = {
+      angle: body.angle,
+      filename: image.filename,
+      url: image.url,
+      createdAt: image.createdAt,
+      prompt: out.built.prompt,
+    };
+    // Ilk uretilen onden kare otomatik olarak birincil referans olur.
+    if (body.angle === reference.primaryKey() || !fresh.reference.filename) {
+      fresh.reference = {
+        filename: image.filename,
+        publicUrl: fresh.reference.publicUrl || '',
+        setAt: new Date().toISOString(),
+      };
+    }
+    store.saveCharacter(fresh);
+
+    return { angle: body.angle, image, status: reference.status(fresh), tookMs: out.tookMs };
+  },
+
+  'POST /api/referans/promptlar': async () => {
+    const character = store.getCharacter();
+    if (!character) throw notFound('Once karakter yarat.');
+    const { spec, config } = activeProvider();
+    const dialect = config.dialect || spec.dialect;
+    return {
+      prompts: reference.ANGLES.map((a) => ({
+        key: a.key,
+        label: a.label,
+        built: promptcraft.build(character, reference.sceneFor(a.key), dialect),
+      })),
+    };
+  },
+
+  'POST /api/referans/birincil': async (body) => {
+    const character = store.getCharacter();
+    if (!character) throw notFound('Once karakter yarat.');
+    const entry = (character.referenceSet || {})[body.angle];
+    if (!entry) throw notFound('Bu aci henuz uretilmemis.');
+    character.reference = {
+      filename: entry.filename,
+      publicUrl: character.reference.publicUrl || '',
+      setAt: new Date().toISOString(),
+    };
+    store.saveCharacter(character);
+    return { status: reference.status(character) };
+  },
+
+  /* ---------------------------------------------------- gorev / brief / plan */
+
+  'POST /api/brief': async (body) => {
+    const character = store.getCharacter();
+    if (!character) throw notFound('Once karakter yarat.');
+    const text = String(body.text || '').trim();
+    if (!text) throw badRequest('Bir istek yaz. Ornek: "kahve reklami yap" veya "spor salonunda foto".');
+    const scene = brief.toScene(text, character);
+    const { spec, config } = activeProvider();
+    return {
+      scene,
+      prompt: promptcraft.build(character, scene, config.dialect || spec.dialect),
+      tasks: brief.taskList(),
+    };
+  },
+
+  'GET /api/plan': async () => {
+    const character = store.getCharacter();
+    if (!character) throw notFound('Once karakter yarat.');
+    return { plan: brief.weeklyPlan(character), tasks: brief.taskList() };
   },
 
   'GET /api/saglayicilar': async () => {
@@ -514,18 +642,20 @@ store.ensureDirs();
 server.listen(PORT, '127.0.0.1', () => {
   const character = store.getCharacter();
   const { spec } = activeProvider();
+  const refStatus = character ? reference.status(character) : null;
   console.log('');
   console.log('  ================================================');
-  console.log('   AI INFLUENCER OTOMASYON');
+  console.log('   SECOND SELF - AI influencer karakter otomasyonu');
   console.log('  ================================================');
   console.log(`   Panel      : http://localhost:${PORT}`);
   console.log(`   Karakter   : ${character ? `${character.identity.name} (@${character.identity.handle}) - KILITLI` : 'yok - sihirbaz acilacak'}`);
+  if (refStatus) console.log(`   Vesikalik  : ${refStatus.done}/${refStatus.total} aci`);
   console.log(`   Uretici    : ${spec.label}`);
   if (spec.id === 'manual') {
     console.log('');
     console.log('   ! Bagli gorsel uretim API\'si yok.');
     console.log('     Bu otomasyon kendi basina gorsel URETMEZ, stok gorsel de kullanmaz.');
-    console.log('     Panelde Ayarlar > Gorsel Uretim bolumunden kendi platformunu bagla.');
+    console.log('     Panelde Ayarlar > Gorsel Uretim bolumunden bir platform sec.');
   }
   console.log('');
   console.log('   Kapatmak icin Ctrl+C');

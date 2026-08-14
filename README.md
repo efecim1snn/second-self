@@ -1,106 +1,169 @@
-# AI Influencer Otomasyon
+# Second Self
 
-Sıfırdan bir AI influencer karakteri yaratır, o karakteri **kilitler** ve her görselde aynı kişinin çıkması için
-kullandığın görsel üretim platformuna **o platformun diline göre kurulmuş en iyi prompt'u** gönderir.
+Sıfırdan **bir insan** yaratır: yüzünden ailesine, şehrinden gelirine, günlük rutininden korkusuna kadar.
+Karakteri **kilitler**, yüzünün 8 açıdan vesikalığını çıkarır ve ondan sonra ne istersen —
+"spor salonunda foto", "kahve reklamı yap" — hep **aynı kişiyi** üretir.
 
-Sıfır bağımlılık. Sadece Node.js 18+ gerekir.
+Sıfır bağımlılık. Node.js 18+ dışında hiçbir şey gerekmez.
 
 ---
 
-## ⚠️ ÖNCE BUNU OKU: Bu otomasyon görsel ÜRETMEZ
-
-Bu net olsun, sonra "bu otomasyon görsel üretmiyor" demeyin:
+## ⚠️ ÖNCE BUNU OKU: Bu otomasyon görselin kendisini ÜRETMEZ
 
 - Bu yazılımın **içinde görsel üretme motoru yoktur.**
-- **Hiçbir stok görsel içermez.** Hazır fotoğraf havuzu yok, örnek görsel yok.
-- Görselin geldiği **tek** yer, senin bağladığın görsel üretim API'sidir.
+- **Hiçbir stok görsel içermez.** Hazır fotoğraf havuzu yok.
+- Görselin geldiği tek yer, **bağlı olan görsel üretim API'sidir.**
 
-**Bir üretim aracı bağlamak zorundasın.** Hangisini kullanıyorsan onu bağla — Leonardo, OpenAI, Stability,
-Replicate, fal.ai, kendi bilgisayarındaki Stable Diffusion, ComfyUI... Listede olmayan bir platform
-(Higgsfield, Ideogram, Runware, Midjourney proxy'si, kendi sunucun) kullanıyorsan **"Özel API"** seçeneğiyle
-onu da bağlayabilirsin.
+**İyi haber:** kutudan çıkar çıkmaz çalışır. Varsayılan olarak **Pollinations.ai** bağlı gelir —
+ücretsiz, **API anahtarı bile istemez**. Kurup çalıştırdığın anda ilk vesikalığını üretebilirsin.
 
-API bağlamadıysan otomasyon çalışmayı reddetmez — sana **kusursuz prompt'u** verir, sen kendi aracına
-yapıştırırsın. Ama görseli getiren şey her zaman senin bağladığın API'dir.
+Kaliteyi yükseltmek istediğinde kendi platformunu bağlarsın: Leonardo, OpenAI, Stability, Replicate,
+fal.ai, kendi bilgisayarındaki Stable Diffusion, ComfyUI — ya da listede olmayan herhangi bir şey için
+**"Özel API"**.
 
 ---
 
 ## Ne yapar?
 
-1. **Sorar.** Çalıştırdığında bir sihirbaz açılır ve karakteri belirleyen soruları sorar:
-   bölge, ırk/etnik köken, ten rengi, göz rengi, yaş, vücut tipi, vücut ölçüleri, burç, eğitim düzeyi, ilgi alanları
-   (+ görsel üretimi için zorunlu olan cinsiyet, saç ve ayırt edici özellik).
+### 1. Bir insan yaratır (sihirbaz)
 
-2. **Karakteri kilitler.** Cevaplardan şunları üretir:
-   - **Fiziksel çekirdek** — her prompt'a kelimesi kelimesine aynı giren tarif satırı
-   - **Sabit seed** — kimlikten türetilen deterministik sayı
-   - **Kişilik** — burçtan gelen karakter özellikleri, konuşma tonu, imza kancası
-   - **Ses rehberi** — eğitim düzeyine göre kelime dağarcığı, cümle uzunluğu, emoji kuralı
-   - **Hikaye ve içerik sütunları** — ilgi alanlarından üretilir
-   - **Gardırop / mekân / aksesuar havuzu** — sahne üretiminde kullanılır
+Çalıştırdığında sırayla sorar:
 
-3. **Prompt'u kurar.** Aynı sahneyi her platformun sevdiği biçimde yazar:
-   Midjourney (`--ar --style raw --seed --cref`), Leonardo (ayrı negatif prompt),
-   SDXL (ağırlıklı etiket + önerilen sampler/CFG), FLUX (düz cümle, negatif yok),
-   DALL·E (tam cümle, parametre yok), Higgsfield / karakter referanslı araçlar, ve genel.
+**Görünüş** — cinsiyet, bölge, ırk/etnik köken, ten rengi, göz rengi, saç rengi, saç tipi, yaş,
+vücut tipi, vücut ölçüleri, ayırt edici özellikler
 
-4. **Senin API'nden üretir.** Bağlı platforma isteği gönderir, dönen görseli indirip `data/images/` altına kaydeder.
+**Hayat** — hangi şehirde yaşıyor, nerede doğdu, sosyoekonomik kökeni, annesi/babası ne iş yapıyor,
+kardeşi var mı, ilişki durumu, çocuğu, mesleği, geliri, nasıl bir evde yaşıyor, evcil hayvanı,
+nasıl ulaşıyor, hangi dilleri konuşuyor
 
-5. **Tutarlılığı korur.** Kimlik değiştirilemez. Değişen tek şey poz / kıyafet / ortam / ışık.
-   En iyi kareyi "altın kare" yaparsan, referans destekleyen platformlarda yüz kilidi olarak gönderilir.
+**Karakter** — burcu, eğitim düzeyi, ilgi alanları, günlük ritmi, hayatını değiştiren olay,
+en büyük korkusu, hayali, yaşam felsefesi, müzik zevki
 
-6. **Sıfırlanır.** Yeni bir karakter yaratmak istersen **TÜM VERİYİ SİL** komutu her şeyi temizler,
-   sihirbaz sıfırdan başlar.
+Cevaplamak istemediklerini boş bırakabilirsin: **"Kalanını sen doldur"** dediğinde otomasyon kalanları
+verdiğin cevaplarla **tutarlı** şekilde doldurur — gelir düzeyi eve, ev ulaşıma, bölge şehre bağlanır.
+Rastgele değildir; aynı cevaplar hep aynı karakteri üretir.
+
+Sonuç: kilitli kimlik + **Türkçe karakter dosyası** (okunabilir bir hayat hikâyesi) + ses rehberi +
+içerik sütunları.
+
+### 2. Vesikalık setini çıkarır (ilk iş)
+
+Herhangi bir içerik görseli üretmeden önce yüzün **8 açıdan** vesikalığı alınır:
+önden, sol/sağ çeyrek (45°), sol/sağ profil (90°), alttan açı, üstten açı, arkadan çeyrek.
+
+Neden: tek bir "altın kare" yüzü sadece o açıdan tanımlar. Model karakteri yandan göstermek
+istediğinde tahmin etmeye başlar ve yüz kayar. 8 açılık set bunu engeller — ayrıca bir LoRA eğitmek
+veya platformda "karakter" oluşturmak için gereken minimum veri setidir.
+
+**8 karede değişen tek şey açıdır.** Kıyafet (düz beyaz tişört), arka plan (düz açık gri),
+ışık ve ifade birebir aynı tutulur.
+
+### 3. İstediğini yapar (brief)
+
+Serbest yaz, sahneye çevirsin:
+
+| Yazdığın | Ne olur |
+|---|---|
+| `kahve reklamı yap` | Kahve reklamı sahnesi: ürün kadrajda net, üstte başlık için boşluk |
+| `spor salonunda foto` | Karakterin şehrindeki modern spor salonu, antrenman anı |
+| `sokakta kombin çekimi` | Şehrin dokulu bir sokağı, tam boy, kıyafet baştan aşağı görünür |
+| `otel işbirliği` | Seyahat sahnesi |
+| `kar altında kitap okurken` | Eşleşme yoksa isteğin aynen prompt'a girer |
+
+Mekân karakterin gerçekten yaşadığı şehirden, kıyafet gelir düzeyinden, aksesuar evcil hayvanından gelir.
+
+### 4. Haftalık plan üretir
+
+Karakterin günlük ritmine ve mesleğine göre 7 günlük içerik takvimi. Her günün sahnesi hazır;
+"Üret" dediğin an bağlı API'ye gider.
+
+### 5. Sıfırlanır
+
+**TÜM VERİYİ SİL** — karakter, vesikalık seti ve tüm görseller gider, sihirbaz sıfırdan başlar.
+Karakter bir kez kilitlendiği için yeni bir insan yaratmanın tek yolu budur.
 
 ---
 
 ## Kurulum
 
 ```bash
-git clone https://github.com/<kullanici>/ai-influencer-otomasyon.git
-cd ai-influencer-otomasyon
+git clone https://github.com/efecim1snn/second-self.git
+cd second-self
 ```
 
-Windows'ta `BASLAT.bat` dosyasına çift tıkla.
-macOS / Linux'ta:
+Windows'ta `BASLAT.bat` dosyasına çift tıkla. macOS / Linux'ta:
 
 ```bash
 bash baslat.sh
 ```
 
-Panel: **http://localhost:4200** (portu değiştirmek için `PORT=5000 node server.js`)
+Panel: **http://localhost:4200** (port değiştirmek için `PORT=5000 node server.js`)
+
+---
+
+## Tutarlılık nasıl sağlanıyor?
+
+Aynı yüzü her seferinde yakalamak dört katmandır:
+
+1. **Fiziksel çekirdek** — yaş, etnik köken, ten, göz, saç, ayırt edici özellik tek bir satır olarak
+   her prompt'a **kelimesi kelimesine** girer.
+2. **Sabit seed** — kimlikten SHA-256 ile türetilir, seed destekleyen her modelde aynı sayı gider.
+3. **Vesikalık seti** — 8 açı, referans destekleyen platformlara gönderilir.
+4. **Platform desteği** — asıl belirleyici olan bu.
+
+> **Dürüst olalım:** ücretsiz Pollinations referans görsel *kabul etmez*. Yapıyı (stüdyo, kadraj,
+> arka plan, poz) doğru kurar ama açılar arasında yüz ve saç kayabilir. Yüzü **gerçekten** kilitlemek
+> için referans görsel alan bir platform gerekir: Replicate/fal.ai (IP-Adapter, redux modelleri),
+> yerel ComfyUI (IPAdapter FaceID) veya karakter referansı destekleyen bir servis.
+> Panel, bağlı platform referans kabul etmiyorsa seni bu konuda uyarır.
+
+---
+
+## Hata payı uyarıları
+
+Bazı özellikler yapay zekâda **her karede farklı çıkar.** Sihirbaz bunları seçerken risk rozeti gösterir
+ve karakter kartında uyarı kalıcı olarak durur:
+
+| Özellik | Risk | Neden |
+|---|---|---|
+| **Dövme** (her yeri) | 🔴 Yüksek | AI aynı deseni iki kez üretemez. Her karede farklı çıkar ve izleyen fark eder. Kullanacaksan küçük ve basit tut, çoğu karede kıyafetle kapat. |
+| **Çiller (yoğun)** | 🔴 Yüksek | Yoğunluk ve dağılım her karede değişir; uzak çekimlerde lekeye dönüşür. |
+| **Heterokromi** | 🔴 Yüksek | Modeller ya yok sayar ya yanlış göze uygular. |
+| **Çiller (hafif)** | 🟠 Orta | Dağılım biraz oynar ama kabul edilebilir. |
+| Ben, piercing, beyaz saç tutamı, sabit kolye | 🟠 Orta | Yeri/biçimi karelerde kayabilir. |
+| Gözlük, gamze, belirgin kaşlar | 🟢 Düşük | Kararlı çalışır. |
+
+Otomasyon ayrıca riskli özellik seçildiğinde negatif prompt'a hedefli eklemeler yapar
+(çil → `blotchy skin`, dövme → `smudged tattoo`) ve **bilek/kol/sırt dövmesini vesikalık
+promptundan tamamen çıkarır** — çünkü baş-omuz kadrajında görünmez, bırakılırsa model uydurur.
 
 ---
 
 ## Görsel üretim platformunu bağlama
 
-Panelde **Ayarlar → Görsel üretim sağlayıcısı** bölümünden seç, anahtarını gir, **Bağlantıyı test et**.
+**Ayarlar → Görsel üretim sağlayıcısı**
 
-| Platform | Ne gerekiyor | Not |
+| Platform | Ne gerekiyor | Referans görsel |
 |---|---|---|
-| **Leonardo.ai** | API Key | Günlük ücretsiz kredi verir |
-| **OpenAI** (gpt-image / DALL·E 3) | API Key | Kurulumu en kolay; seed desteklemez, tutarlılıkta en zayıf |
-| **Stability AI** | API Key | Seed + negatif prompt destekler |
-| **Replicate** | API Token + model adı | FLUX/SDXL dahil her model; referans görsel gönderilebilir |
-| **fal.ai** | API Key + model yolu | Hızlı, senkron |
-| **Yerel Stable Diffusion** (A1111/Forge) | `--api` ile açık WebUI | Ücretsiz ve sınırsız; referans varsa img2img'e geçer |
-| **Yerel ComfyUI** | Workflow JSON (API formatı) | En esnek; IPAdapter FaceID ile en sağlam yüz kilidi |
-| **Özel API** | URL + başlıklar + gövde şablonu | **Listede olmayan her platform için** |
+| **Pollinations.ai** (varsayılan) | Hiçbir şey — ücretsiz, anahtarsız | ✗ |
+| Leonardo.ai | API Key | ✗ (panelde elle) |
+| OpenAI (gpt-image / DALL·E 3) | API Key | ✗ |
+| Stability AI | API Key | ✗ |
+| **Replicate** | API Token + model adı | ✓ |
+| **fal.ai** | API Key + model yolu | ✓ |
+| **Yerel Stable Diffusion** (A1111/Forge) | `--api` ile açık WebUI | ✓ |
+| **Yerel ComfyUI** | Workflow JSON (API formatı) | ✓ |
+| **Özel API** | URL + başlıklar + gövde şablonu | ✓ |
 
 ### "Özel API" nasıl kullanılır?
 
 Higgsfield, Ideogram, Runware, bir Midjourney proxy'si veya kendi sunucun — hepsi buradan bağlanır.
-Platformun dokümanındaki isteği şu alanlara çevir:
 
 - **URL** — üretim uç noktası
-- **Başlıklar (JSON)** — `{"Authorization": "Bearer ANAHTARIN"}`
-- **Gövde şablonu (JSON)** — platformun beklediği alan adlarıyla, değişkenleri koyarak:
-  `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}` `{{aspect}}` `{{reference}}`
+- **Başlıklar (JSON)** — `{"Authorization": "Bearer ANAHTARIN"}` (panelde maskelenir)
+- **Gövde şablonu (JSON)** — değişkenler: `{{prompt}}` `{{negative}}` `{{seed}}` `{{width}}` `{{height}}` `{{aspect}}` `{{reference}}`
 - **Yanıt tipi** — `url` / `base64` / `binary` / `async`
-- **Yanıt içindeki yol** — görselin JSON'da durduğu yer, örn. `images[0].url`
-- **async** seçtiysen ayrıca durum sorgu adresi ve iş kimliğinin yolu
-
-Örnek gövde şablonu:
+- **Yanıt içindeki yol** — örn. `images[0].url`
 
 ```json
 {
@@ -112,43 +175,38 @@ Platformun dokümanındaki isteği şu alanlara çevir:
 }
 ```
 
-Değişkenleri **tırnak içinde de tırnaksız da** yazabilirsin — otomasyon tipi kendisi ayarlar:
-`"{{prompt}}"` metin olarak (kaçış karakterleri dahil doğru) gider, `{{seed}}` sayı olarak gider.
-Platformun dokümanından kopyaladığın gövdeyi olduğu gibi yapıştırıp sadece değerleri değişkenlerle
-değiştirmen yeterli.
+Değişkenleri tırnak içinde de tırnaksız da yazabilirsin — otomasyon tipi kendisi ayarlar.
 
 ---
 
-## Karakteri sıfırlama (TÜM VERİYİ SİL)
+## Prompt motoru
 
-Karakter bir kez kilitlenir; yeni bir kişi yaratmanın tek yolu her şeyi silmektir.
+Aynı sahneyi her aracın sevdiği biçimde yazar:
 
-Panelden: **Ayarlar → TÜM VERİYİ SİL** (kutuya `SIFIRLA` yazman istenir)
+- **Midjourney** — `--ar --style raw --v 7 --seed`, referans varsa `--cref`
+- **Leonardo** — ayrı negatif prompt alanı
+- **SDXL** — ağırlıklı etiketler + önerilen sampler/CFG/çözünürlük
+- **FLUX** — düz cümle, negatif prompt yok
+- **DALL·E** — tam cümle, parametre yok, dilbilgisi düzeltilmiş
+- **Higgsfield / karakter referanslı araçlar**
+- **Genel**
 
-Komut satırından:
+Vesikalık promptu ayrı kurulur: **önce format, sonra kişi.** Kişiyi anlatarak başlarsan
+"düz gri stüdyo arka planı" talimatı sonda kalır ve model karakteri plaja, sokağa, nereye isterse koyar.
+
+---
+
+## Sıfırlama
 
 ```bash
 node reset.js --confirm
 ```
 
-- Varsayılan davranış: veriler `data/_arsiv/<tarih>/` altına **taşınır** (geri alınabilir)
-- `--hard` eklersen kalıcı silinir
-- `--all` eklersen API anahtarların da silinir (varsayılan olarak korunur)
+- Varsayılan: `data/_arsiv/<tarih>/` altına **taşınır** (geri alınabilir)
+- `--hard` → kalıcı siler
+- `--all` → API anahtarların da silinir (varsayılan olarak korunur)
 
----
-
-## Tutarlılık nasıl sağlanıyor?
-
-Aynı yüzü her seferinde yakalamak üç katmandan oluşur:
-
-1. **Fiziksel çekirdek (en önemlisi).** Yaş, etnik köken, ten, göz, saç, vücut, ayırt edici özellik —
-   tek bir cümle olarak her prompt'a **aynen** girer. Tek kelime bile değişmez.
-2. **Sabit seed.** Kimlikten SHA-256 ile türetilir. Seed destekleyen her modelde aynı sayı gider.
-3. **Referans görsel.** En iyi kareyi "altın kare" yap; referans destekleyen platformlara
-   (Replicate, fal, yerel SD, ComfyUI, Özel API) görsel olarak gönderilir. Midjourney/Higgsfield gibi
-   link isteyen araçlar için görseli internete yükleyip URL'sini karakter kartına yapıştırırsın.
-
-En sağlam sonuç: yerel ComfyUI + IPAdapter FaceID, veya karakter referansı destekleyen bir bulut platformu.
+Panelden: **Ayarlar → TÜM VERİYİ SİL** (kutuya `SIFIRLA` yazman istenir)
 
 ---
 
@@ -159,7 +217,11 @@ server.js              yerel panel sunucusu (sıfır bağımlılık)
 reset.js               TÜM VERİYİ SİL - komut satırı
 src/
   wizard.js            sorular + doğrulama + seed türetme
-  persona.js           burç/eğitim/ilgi alanı → kişilik, ses rehberi, hikâye
+  life.js              şehir havuzu, hayat soruları, tutarlı otomatik doldurma, karakter dosyası
+  traits.js            ayırt edici özellikler + RİSK seviyeleri ve uyarıları
+  persona.js           burç/eğitim/ilgi alanı → kişilik, ses rehberi, içerik sütunları
+  reference.js         8 açılı vesikalık seti
+  brief.js             serbest istek → sahne, haftalık plan
   promptcraft.js       kilitli kimlik → her platformun diline göre prompt
   scenes.js            poz/kıyafet/ortam/ışık üretimi
   store.js             JSON kalıcılık + sıfırlama
@@ -168,8 +230,7 @@ public/                panel arayüzü
 data/                  karakterin, anahtarların, görsellerin (git'e girmez)
 ```
 
-Yeni bir platform eklemek: `src/providers/` içine bir dosya koy, `src/providers/index.js`'teki listeye ekle.
-Başka hiçbir yeri değiştirmen gerekmez.
+Yeni platform eklemek: `src/providers/` içine bir dosya koy, `src/providers/index.js`'teki listeye ekle.
 
 ---
 
@@ -178,21 +239,24 @@ Başka hiçbir yeri değiştirmen gerekmez.
 - **18+ zorunlu.** Sihirbaz 18 yaşından küçük karakter oluşturmayı kabul etmez.
 - **Gerçek kişi taklidi yok.** Var olan bir insanın adını, yüzünü veya kimliğini taklit eden karakter üretme.
 - **AI olduğunu belirt.** Instagram ve diğer platformlar yapay zekâ üretimi içerik için etiketleme istiyor;
-  biyografiye de "AI" ibaresi koy. Hem kural gereği hem de uzun vadede hesabını korur.
-- **Anahtarların sende kalır.** `data/providers.json` sadece kendi bilgisayarındadır, `.gitignore`'dadır,
-  hiçbir yere gönderilmez. Bu yazılımın kendi sunucusu yoktur.
-- Platform API'leri değişebilir; bir entegrasyon bozulursa ilgili tek dosyayı (`src/providers/<ad>.js`) düzelt.
+  biyografiye de "AI" ibaresi koy.
+- **Anahtarların sende kalır.** `data/providers.json` sadece kendi bilgisayarındadır ve `.gitignore`'dadır.
+  Bu yazılımın kendi sunucusu yoktur.
+- Platform API'leri değişebilir; bir entegrasyon bozulursa ilgili tek dosyayı düzelt.
 
 ---
 
 ## English (short)
 
-**This tool does not generate images and ships with no stock imagery.** It builds a locked AI-influencer
-character from a setup interview (region, ethnicity, skin/eye colour, age, body type, measurements, zodiac,
-education, interests), derives a deterministic seed and an immutable physical descriptor, then crafts the
-best possible prompt **in the dialect of whichever image API you connect** (Leonardo, OpenAI, Stability,
-Replicate, fal.ai, local Automatic1111, local ComfyUI, or any other platform via the **Custom API** adapter)
-and saves whatever that API returns. No provider connected means no images — only prompts.
-Run `node server.js`, open `http://localhost:4200`. Reset everything with `node reset.js --confirm`.
+**Second Self** builds a complete fictional person from scratch — appearance, city, family, income,
+routine, fears — locks the identity, then shoots an **8-angle passport reference set** so every later
+image is the same person. Ask it for anything in plain language ("coffee ad", "gym photo") and it turns
+that into a scene consistent with the character's life.
 
-MIT.
+**It does not generate images itself and ships with no stock imagery.** It crafts the best prompt in the
+dialect of whichever image API you connect and saves what that API returns. **Pollinations.ai is wired in
+by default — free, no API key** — so it works out of the box; connect Leonardo, OpenAI, Stability,
+Replicate, fal.ai, local Automatic1111/ComfyUI, or anything else via the **Custom API** adapter for
+better quality and true face-locking via reference images.
+
+`node server.js` → `http://localhost:4200`. Reset with `node reset.js --confirm`. MIT.
