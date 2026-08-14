@@ -1,0 +1,9 @@
+# API anahtarlarin, karakterin ve uretilen gorseller burada durur.
+# ASLA repoya girmemeli.
+data/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*

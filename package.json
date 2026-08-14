@@ -1,0 +1,23 @@
+{
+  "name": "ai-influencer-otomasyon",
+  "version": "1.0.0",
+  "description": "Sifirdan AI influencer karakteri yaratir, kilitler ve tutarli gorsel uretimi icin senin bagladigin gorsel uretim API'sine en iyi prompt'u gonderir. Gorsel uretmez - uretici sen baglarsin.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "reset": "node reset.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "ai-influencer",
+    "character-consistency",
+    "prompt-engineering",
+    "virtual-influencer",
+    "instagram",
+    "automation"
+  ],
+  "license": "MIT",
+  "dependencies": {}
+}
