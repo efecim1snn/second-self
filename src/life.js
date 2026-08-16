@@ -16,158 +16,240 @@
  * yasadigini belirler.
  */
 
-/* --------------------------------------------------- bolgeye gore sehirler */
+/* ------------------------------------------- KITA -> ULKE -> SEHIR agaci */
 
-const CITIES = {
-  'Akdeniz': [
-    { tr: 'Barselona, İspanya', en: 'Barcelona, Spain' },
-    { tr: 'Napoli, İtalya', en: 'Naples, Italy' },
-    { tr: 'Atina, Yunanistan', en: 'Athens, Greece' },
-    { tr: 'Marsilya, Fransa', en: 'Marseille, France' },
-    { tr: 'Valensiya, İspanya', en: 'Valencia, Spain' },
-    { tr: 'Palermo, İtalya', en: 'Palermo, Italy' },
-  ],
-  'Kuzey Avrupa': [
-    { tr: 'Stockholm, İsveç', en: 'Stockholm, Sweden' },
-    { tr: 'Kopenhag, Danimarka', en: 'Copenhagen, Denmark' },
-    { tr: 'Oslo, Norveç', en: 'Oslo, Norway' },
-    { tr: 'Helsinki, Finlandiya', en: 'Helsinki, Finland' },
-    { tr: 'Reykjavik, İzlanda', en: 'Reykjavik, Iceland' },
-  ],
-  'Bati Avrupa': [
-    { tr: 'Paris, Fransa', en: 'Paris, France' },
-    { tr: 'Amsterdam, Hollanda', en: 'Amsterdam, Netherlands' },
-    { tr: 'Berlin, Almanya', en: 'Berlin, Germany' },
-    { tr: 'Londra, İngiltere', en: 'London, England' },
-    { tr: 'Lizbon, Portekiz', en: 'Lisbon, Portugal' },
-    { tr: 'Dublin, İrlanda', en: 'Dublin, Ireland' },
-  ],
-  'Dogu Avrupa': [
-    { tr: 'Varşova, Polonya', en: 'Warsaw, Poland' },
-    { tr: 'Prag, Çekya', en: 'Prague, Czechia' },
-    { tr: 'Budapeşte, Macaristan', en: 'Budapest, Hungary' },
-    { tr: 'Bükreş, Romanya', en: 'Bucharest, Romania' },
-    { tr: 'Kiev, Ukrayna', en: 'Kyiv, Ukraine' },
-  ],
-  'Balkanlar': [
-    { tr: 'Belgrad, Sırbistan', en: 'Belgrade, Serbia' },
-    { tr: 'Zagreb, Hırvatistan', en: 'Zagreb, Croatia' },
-    { tr: 'Split, Hırvatistan', en: 'Split, Croatia' },
-    { tr: 'Saraybosna, Bosna', en: 'Sarajevo, Bosnia' },
-    { tr: 'Tiran, Arnavutluk', en: 'Tirana, Albania' },
-  ],
-  'Anadolu / Turkiye': [
-    { tr: 'İstanbul', en: 'Istanbul, Turkey' },
-    { tr: 'İzmir', en: 'Izmir, Turkey' },
-    { tr: 'Ankara', en: 'Ankara, Turkey' },
-    { tr: 'Antalya', en: 'Antalya, Turkey' },
-    { tr: 'Bodrum', en: 'Bodrum, Turkey' },
-    { tr: 'Eskişehir', en: 'Eskisehir, Turkey' },
-  ],
-  'Kafkasya': [
-    { tr: 'Tiflis, Gürcistan', en: 'Tbilisi, Georgia' },
-    { tr: 'Erivan, Ermenistan', en: 'Yerevan, Armenia' },
-    { tr: 'Bakü, Azerbaycan', en: 'Baku, Azerbaijan' },
-    { tr: 'Batum, Gürcistan', en: 'Batumi, Georgia' },
-  ],
-  'Orta Dogu': [
-    { tr: 'Dubai, BAE', en: 'Dubai, UAE' },
-    { tr: 'Beyrut, Lübnan', en: 'Beirut, Lebanon' },
-    { tr: 'Amman, Ürdün', en: 'Amman, Jordan' },
-    { tr: 'Doha, Katar', en: 'Doha, Qatar' },
-    { tr: 'Tel Aviv, İsrail', en: 'Tel Aviv, Israel' },
-  ],
-  'Kuzey Afrika': [
-    { tr: 'Kazablanka, Fas', en: 'Casablanca, Morocco' },
-    { tr: 'Marakeş, Fas', en: 'Marrakesh, Morocco' },
-    { tr: 'Kahire, Mısır', en: 'Cairo, Egypt' },
-    { tr: 'Tunus, Tunus', en: 'Tunis, Tunisia' },
-  ],
-  'Sahra Alti Afrika': [
-    { tr: 'Lagos, Nijerya', en: 'Lagos, Nigeria' },
-    { tr: 'Nairobi, Kenya', en: 'Nairobi, Kenya' },
-    { tr: 'Cape Town, Güney Afrika', en: 'Cape Town, South Africa' },
-    { tr: 'Accra, Gana', en: 'Accra, Ghana' },
-    { tr: 'Addis Ababa, Etiyopya', en: 'Addis Ababa, Ethiopia' },
-  ],
-  'Orta Asya': [
-    { tr: 'Almatı, Kazakistan', en: 'Almaty, Kazakhstan' },
-    { tr: 'Taşkent, Özbekistan', en: 'Tashkent, Uzbekistan' },
-    { tr: 'Bişkek, Kırgızistan', en: 'Bishkek, Kyrgyzstan' },
-  ],
-  'Guney Asya': [
-    { tr: 'Mumbai, Hindistan', en: 'Mumbai, India' },
-    { tr: 'Yeni Delhi, Hindistan', en: 'New Delhi, India' },
-    { tr: 'Bangalore, Hindistan', en: 'Bangalore, India' },
-    { tr: 'Kolombo, Sri Lanka', en: 'Colombo, Sri Lanka' },
-  ],
-  'Dogu Asya': [
-    { tr: 'Tokyo, Japonya', en: 'Tokyo, Japan' },
-    { tr: 'Seul, Güney Kore', en: 'Seoul, South Korea' },
-    { tr: 'Şangay, Çin', en: 'Shanghai, China' },
-    { tr: 'Taipei, Tayvan', en: 'Taipei, Taiwan' },
-    { tr: 'Kyoto, Japonya', en: 'Kyoto, Japan' },
-  ],
-  'Guneydogu Asya': [
-    { tr: 'Bangkok, Tayland', en: 'Bangkok, Thailand' },
-    { tr: 'Bali, Endonezya', en: 'Bali, Indonesia' },
-    { tr: 'Singapur', en: 'Singapore' },
-    { tr: 'Ho Chi Minh, Vietnam', en: 'Ho Chi Minh City, Vietnam' },
-    { tr: 'Manila, Filipinler', en: 'Manila, Philippines' },
-  ],
-  'Latin Amerika': [
-    { tr: 'Mexico City, Meksika', en: 'Mexico City, Mexico' },
-    { tr: 'Buenos Aires, Arjantin', en: 'Buenos Aires, Argentina' },
-    { tr: 'Rio de Janeiro, Brezilya', en: 'Rio de Janeiro, Brazil' },
-    { tr: 'Bogota, Kolombiya', en: 'Bogota, Colombia' },
-    { tr: 'Medellin, Kolombiya', en: 'Medellin, Colombia' },
-  ],
-  'Kuzey Amerika': [
-    { tr: 'New York, ABD', en: 'New York City, USA' },
-    { tr: 'Los Angeles, ABD', en: 'Los Angeles, USA' },
-    { tr: 'Miami, ABD', en: 'Miami, USA' },
-    { tr: 'Toronto, Kanada', en: 'Toronto, Canada' },
-    { tr: 'Austin, ABD', en: 'Austin, USA' },
-  ],
-  'Okyanusya': [
-    { tr: 'Sidney, Avustralya', en: 'Sydney, Australia' },
-    { tr: 'Melbourne, Avustralya', en: 'Melbourne, Australia' },
-    { tr: 'Auckland, Yeni Zelanda', en: 'Auckland, New Zealand' },
-    { tr: 'Gold Coast, Avustralya', en: 'Gold Coast, Australia' },
-  ],
+/**
+ * Sehir secimi kademeli: once kita, sonra ulke, sonra sehir.
+ * Sehirler ya duz metin ('Madrid' -> TR ve EN ayni) ya da ['TR', 'EN'] cifti.
+ * Ingilizce karsilik prompt'a girer ("a sunlit street in Barcelona, Spain").
+ */
+const GEO = {
+  'Avrupa': {
+    'Turkiye': [['İstanbul', 'Istanbul'], ['İzmir', 'Izmir'], 'Ankara', 'Antalya', 'Bodrum', ['Eskişehir', 'Eskisehir']],
+    'İspanya': [['Barselona', 'Barcelona'], 'Madrid', ['Valensiya', 'Valencia'], ['Sevilla', 'Seville'], ['Malaga', 'Malaga']],
+    'İtalya': [['Roma', 'Rome'], ['Milano', 'Milan'], ['Napoli', 'Naples'], ['Floransa', 'Florence'], ['Venedik', 'Venice']],
+    'Fransa': ['Paris', ['Marsilya', 'Marseille'], 'Lyon', 'Nice', 'Bordeaux'],
+    'Portekiz': [['Lizbon', 'Lisbon'], 'Porto', 'Faro'],
+    'Yunanistan': [['Atina', 'Athens'], ['Selanik', 'Thessaloniki'], ['Santorini', 'Santorini'], ['Girit', 'Crete']],
+    'Almanya': ['Berlin', ['Münih', 'Munich'], 'Hamburg', ['Köln', 'Cologne']],
+    'Hollanda': ['Amsterdam', 'Rotterdam', ['Lahey', 'The Hague']],
+    'İngiltere': [['Londra', 'London'], 'Manchester', ['Edinburg', 'Edinburgh'], 'Brighton'],
+    'İrlanda': ['Dublin', 'Galway'],
+    'İsveç': ['Stockholm', ['Göteborg', 'Gothenburg'], 'Malmö'],
+    'Norveç': ['Oslo', 'Bergen', ['Tromsø', 'Tromso']],
+    'Danimarka': [['Kopenhag', 'Copenhagen'], 'Aarhus'],
+    'İsviçre': [['Zürih', 'Zurich'], ['Cenevre', 'Geneva'], 'Luzern'],
+    'Avusturya': [['Viyana', 'Vienna'], 'Salzburg'],
+    'Polonya': [['Varşova', 'Warsaw'], ['Krakov', 'Krakow'], ['Gdansk', 'Gdansk']],
+    'Çekya': [['Prag', 'Prague'], 'Brno'],
+    'Macaristan': [['Budapeşte', 'Budapest']],
+    'Hırvatistan': ['Zagreb', 'Split', 'Dubrovnik'],
+    'Sırbistan': [['Belgrad', 'Belgrade'], ['Novi Sad', 'Novi Sad']],
+    'Romanya': [['Bükreş', 'Bucharest'], ['Kluj', 'Cluj']],
+    'Ukrayna': [['Kiev', 'Kyiv'], ['Lviv', 'Lviv'], 'Odesa'],
+  },
+  'Asya': {
+    'Japonya': ['Tokyo', ['Osaka', 'Osaka'], 'Kyoto', 'Sapporo'],
+    'Güney Kore': [['Seul', 'Seoul'], 'Busan', 'Jeju'],
+    'Çin': [['Şangay', 'Shanghai'], ['Pekin', 'Beijing'], ['Şenzen', 'Shenzhen'], ['Hong Kong', 'Hong Kong']],
+    'Tayvan': ['Taipei', 'Kaohsiung'],
+    'Tayland': ['Bangkok', ['Chiang Mai', 'Chiang Mai'], 'Phuket'],
+    'Endonezya': ['Bali', ['Cakarta', 'Jakarta'], 'Yogyakarta'],
+    'Vietnam': [['Ho Chi Minh', 'Ho Chi Minh City'], ['Hanoi', 'Hanoi'], ['Da Nang', 'Da Nang']],
+    'Singapur': ['Singapur'],
+    'Filipinler': ['Manila', 'Cebu'],
+    'Hindistan': ['Mumbai', ['Yeni Delhi', 'New Delhi'], ['Bangalore', 'Bengaluru'], 'Goa'],
+    'Kazakistan': [['Almatı', 'Almaty'], ['Astana', 'Astana']],
+    'Özbekistan': [['Taşkent', 'Tashkent'], ['Semerkant', 'Samarkand']],
+    'Gürcistan': [['Tiflis', 'Tbilisi'], ['Batum', 'Batumi']],
+    'Ermenistan': [['Erivan', 'Yerevan']],
+    'Azerbaycan': [['Bakü', 'Baku']],
+  },
+  'Orta Dogu': {
+    'BAE': ['Dubai', ['Abu Dabi', 'Abu Dhabi']],
+    'Katar': ['Doha'],
+    'Suudi Arabistan': ['Riyad', ['Cidde', 'Jeddah']],
+    'Lübnan': [['Beyrut', 'Beirut']],
+    'Ürdün': ['Amman', 'Akabe'],
+    'İsrail': ['Tel Aviv', ['Kudüs', 'Jerusalem']],
+  },
+  'Afrika': {
+    'Fas': [['Kazablanka', 'Casablanca'], ['Marakeş', 'Marrakesh'], ['Tanca', 'Tangier'], ['Rabat', 'Rabat']],
+    'Mısır': [['Kahire', 'Cairo'], ['İskenderiye', 'Alexandria']],
+    'Tunus': ['Tunus'],
+    'Güney Afrika': ['Cape Town', 'Johannesburg', 'Durban'],
+    'Kenya': ['Nairobi', 'Mombasa'],
+    'Nijerya': ['Lagos', 'Abuja'],
+    'Gana': ['Accra'],
+    'Etiyopya': [['Addis Ababa', 'Addis Ababa']],
+    'Senegal': ['Dakar'],
+  },
+  'Kuzey Amerika': {
+    'ABD': [['New York', 'New York City'], 'Los Angeles', 'Miami', 'Chicago', 'Austin', 'Seattle', 'San Francisco'],
+    'Kanada': ['Toronto', 'Vancouver', ['Montreal', 'Montreal']],
+    'Meksika': [['Mexico City', 'Mexico City'], ['Guadalajara', 'Guadalajara'], 'Tulum'],
+  },
+  'Guney Amerika': {
+    'Brezilya': ['Rio de Janeiro', ['Sao Paulo', 'Sao Paulo'], 'Florianopolis'],
+    'Arjantin': ['Buenos Aires', ['Kordoba', 'Cordoba'], 'Mendoza'],
+    'Kolombiya': [['Bogota', 'Bogota'], ['Medellin', 'Medellin'], 'Cartagena'],
+    'Şili': ['Santiago', ['Valparaiso', 'Valparaiso']],
+    'Peru': ['Lima', 'Cusco'],
+  },
+  'Okyanusya': {
+    'Avustralya': [['Sidney', 'Sydney'], 'Melbourne', 'Brisbane', 'Gold Coast', 'Perth'],
+    'Yeni Zelanda': ['Auckland', ['Wellington', 'Wellington'], 'Queenstown'],
+  },
 };
 
-const ALL_CITIES = Object.values(CITIES).flat();
-
-function citiesFor(region) {
-  return CITIES[region] || ALL_CITIES.slice(0, 6);
+/** ['TR','EN'] veya 'Ayni' bicimini {tr, en} nesnesine cevirir. */
+function toCity(entry) {
+  return Array.isArray(entry) ? { tr: entry[0], en: entry[1] } : { tr: entry, en: entry };
 }
 
-function cityEn(trName) {
-  const hit = ALL_CITIES.find((c) => c.tr === trName);
-  return hit ? hit.en : trName;
+/** Ulkenin Ingilizce adi (prompt'ta "Barcelona, Spain" olsun diye). */
+const COUNTRY_EN = {
+  'Turkiye': 'Turkey', 'İspanya': 'Spain', 'İtalya': 'Italy', 'Fransa': 'France',
+  'Portekiz': 'Portugal', 'Yunanistan': 'Greece', 'Almanya': 'Germany',
+  'Hollanda': 'Netherlands', 'İngiltere': 'England', 'İrlanda': 'Ireland',
+  'İsveç': 'Sweden', 'Norveç': 'Norway', 'Danimarka': 'Denmark',
+  'İsviçre': 'Switzerland', 'Avusturya': 'Austria', 'Polonya': 'Poland',
+  'Çekya': 'Czechia', 'Macaristan': 'Hungary', 'Hırvatistan': 'Croatia',
+  'Sırbistan': 'Serbia', 'Romanya': 'Romania', 'Ukrayna': 'Ukraine',
+  'Japonya': 'Japan', 'Güney Kore': 'South Korea', 'Çin': 'China',
+  'Tayvan': 'Taiwan', 'Tayland': 'Thailand', 'Endonezya': 'Indonesia',
+  'Vietnam': 'Vietnam', 'Singapur': 'Singapore', 'Filipinler': 'Philippines',
+  'Hindistan': 'India', 'Kazakistan': 'Kazakhstan', 'Özbekistan': 'Uzbekistan',
+  'Gürcistan': 'Georgia', 'Ermenistan': 'Armenia', 'Azerbaycan': 'Azerbaijan',
+  'BAE': 'UAE', 'Katar': 'Qatar', 'Suudi Arabistan': 'Saudi Arabia',
+  'Lübnan': 'Lebanon', 'Ürdün': 'Jordan', 'İsrail': 'Israel',
+  'Fas': 'Morocco', 'Mısır': 'Egypt', 'Tunus': 'Tunisia',
+  'Güney Afrika': 'South Africa', 'Kenya': 'Kenya', 'Nijerya': 'Nigeria',
+  'Gana': 'Ghana', 'Etiyopya': 'Ethiopia', 'Senegal': 'Senegal',
+  'ABD': 'USA', 'Kanada': 'Canada', 'Meksika': 'Mexico',
+  'Brezilya': 'Brazil', 'Arjantin': 'Argentina', 'Kolombiya': 'Colombia',
+  'Şili': 'Chile', 'Peru': 'Peru',
+  'Avustralya': 'Australia', 'Yeni Zelanda': 'New Zealand',
+};
+
+function continents() {
+  return Object.keys(GEO);
+}
+
+function countriesFor(continent) {
+  return Object.keys(GEO[continent] || {});
+}
+
+function citiesFor(country) {
+  for (const countries of Object.values(GEO)) {
+    if (countries[country]) return countries[country].map(toCity);
+  }
+  return [];
+}
+
+/** Ulkeden kitayi bulur (eski kayitlari onarmak icin de kullanilir). */
+function continentOf(country) {
+  for (const [continent, countries] of Object.entries(GEO)) {
+    if (countries[country]) return continent;
+  }
+  return null;
+}
+
+/** "Barselona, İspanya" -> "Barcelona, Spain" */
+function cityEn(cityLabel) {
+  const raw = String(cityLabel || '').trim();
+  if (!raw) return 'the city';
+  const [cityPart, countryPart] = raw.split(',').map((s) => s.trim());
+
+  for (const countries of Object.values(GEO)) {
+    for (const [country, list] of Object.entries(countries)) {
+      if (countryPart && country !== countryPart) continue;
+      for (const entry of list) {
+        const city = toCity(entry);
+        if (city.tr === cityPart) {
+          const countryEn = COUNTRY_EN[country] || country;
+          return city.en === countryEn ? city.en : `${city.en}, ${countryEn}`;
+        }
+      }
+    }
+  }
+  // Elle yazilmis sehir: oldugu gibi gecir.
+  return raw;
+}
+
+/** Kita + ulke + sehirden saklanacak etiketi kurar: "Barselona, İspanya" */
+function cityLabel(cityTr, country) {
+  if (!cityTr) return '';
+  if (!country || cityTr === country) return cityTr;
+  return `${cityTr}, ${country}`;
 }
 
 /* ------------------------------------------------------------- sorular */
 
+const SAME_AS_CITY = 'Yasadigi sehirle ayni';
+
 const LIFE_QUESTIONS = [
   {
-    key: 'city',
-    section: 'Hayat',
-    label: 'Su an nerede yasiyor?',
-    hint: 'Bu secim gorsellerdeki mekanlari ve icerigin atmosferini belirler.',
-    type: 'dynamic-select',
-    source: 'cities',
+    key: 'continent',
+    section: 'Yasadigi yer',
+    label: 'Hangi kitada yasiyor?',
+    hint: 'Sehir secimi kademeli: once kita, sonra ulke, sonra sehir.',
+    type: 'select',
     required: true,
+    options: () => continents(),
   },
   {
-    key: 'hometown',
-    section: 'Hayat',
-    label: 'Nerede dogup buyudu?',
-    hint: 'Ayni sehir olabilir; farkli olursa karaktere "tasindim" hikayesi kazandirir.',
-    type: 'dynamic-select',
-    source: 'cities+same',
+    key: 'country',
+    section: 'Yasadigi yer',
+    label: 'Hangi ulkede yasiyor?',
+    type: 'select',
     required: true,
+    options: (answers) => countriesFor(answers.continent),
+  },
+  {
+    key: 'cityName',
+    section: 'Yasadigi yer',
+    label: 'Hangi sehirde yasiyor?',
+    hint: 'Bu secim gorsellerdeki mekanlari ve icerigin atmosferini belirler. Listede yoksa kendin yazabilirsin.',
+    type: 'select-or-text',
+    required: true,
+    options: (answers) => citiesFor(answers.country).map((c) => c.tr),
+  },
+  {
+    key: 'hometownMode',
+    section: 'Memleket',
+    label: 'Nerede dogup buyudu?',
+    hint: 'Farkli bir yer secersen karaktere "tasindim" hikayesi kazandirir - icerikte kullanilabilir bir katman.',
+    type: 'select',
+    required: true,
+    options: () => [SAME_AS_CITY, 'Farkli bir yer sececegim'],
+  },
+  {
+    key: 'hometownContinent',
+    section: 'Memleket',
+    label: 'Memleketi hangi kitada?',
+    type: 'select',
+    required: true,
+    showIf: (answers) => answers.hometownMode === 'Farkli bir yer sececegim',
+    options: () => continents(),
+  },
+  {
+    key: 'hometownCountry',
+    section: 'Memleket',
+    label: 'Memleketi hangi ulkede?',
+    type: 'select',
+    required: true,
+    showIf: (answers) => answers.hometownMode === 'Farkli bir yer sececegim',
+    options: (answers) => countriesFor(answers.hometownContinent),
+  },
+  {
+    key: 'hometownCity',
+    section: 'Memleket',
+    label: 'Memleketi hangi sehir?',
+    type: 'select-or-text',
+    required: true,
+    showIf: (answers) => answers.hometownMode === 'Farkli bir yer sececegim',
+    options: (answers) => citiesFor(answers.hometownCountry).map((c) => c.tr),
   },
   {
     key: 'socioeconomic',
@@ -398,14 +480,63 @@ const LIFE_QUESTIONS = [
  * Cevaplanmamis hayat sorularini, verilmis cevaplarla TUTARLI sekilde doldurur.
  * Rastgele degil: gelir duzeyi eve, ev ulasima, bolge sehre baglanir.
  */
+/** Koken bolgesinden makul bir kita/ulke varsayilani. */
+const REGION_DEFAULT = {
+  'Akdeniz': ['Avrupa', 'İspanya'],
+  'Kuzey Avrupa': ['Avrupa', 'İsveç'],
+  'Bati Avrupa': ['Avrupa', 'Fransa'],
+  'Dogu Avrupa': ['Avrupa', 'Polonya'],
+  'Balkanlar': ['Avrupa', 'Hırvatistan'],
+  'Anadolu / Turkiye': ['Avrupa', 'Turkiye'],
+  'Kafkasya': ['Asya', 'Gürcistan'],
+  'Orta Dogu': ['Orta Dogu', 'BAE'],
+  'Kuzey Afrika': ['Afrika', 'Fas'],
+  'Sahra Alti Afrika': ['Afrika', 'Kenya'],
+  'Orta Asya': ['Asya', 'Kazakistan'],
+  'Guney Asya': ['Asya', 'Hindistan'],
+  'Dogu Asya': ['Asya', 'Japonya'],
+  'Guneydogu Asya': ['Asya', 'Tayland'],
+  'Latin Amerika': ['Guney Amerika', 'Kolombiya'],
+  'Kuzey Amerika': ['Kuzey Amerika', 'ABD'],
+  'Okyanusya': ['Okyanusya', 'Avustralya'],
+};
+
 function autoFill(answers, rng = deterministicRng(answers)) {
   const out = { ...answers };
   const pick = (list) => list[Math.floor(rng() * list.length)];
   const q = (key) => LIFE_QUESTIONS.find((x) => x.key === key);
+  const opts = (key) => {
+    const def = q(key);
+    return typeof def.options === 'function' ? def.options(out) : def.options;
+  };
 
-  if (!out.city) out.city = pick(citiesFor(answers.region)).tr;
-  if (!out.hometown) out.hometown = rng() < 0.55 ? out.city : pick(citiesFor(answers.region)).tr;
-  if (!out.socioeconomic) out.socioeconomic = pick(q('socioeconomic').options);
+  // Yasadigi yer: kita -> ulke -> sehir. Bos kalanlar kokene gore doldurulur.
+  const fallback = REGION_DEFAULT[answers.region] || ['Avrupa', 'İspanya'];
+  if (!out.continent) out.continent = fallback[0];
+  if (!out.country) {
+    const list = countriesFor(out.continent);
+    out.country = list.includes(fallback[1]) ? fallback[1] : (list[0] || 'İspanya');
+  }
+  if (!out.cityName) {
+    const list = citiesFor(out.country);
+    out.cityName = list.length ? pick(list).tr : out.country;
+  }
+
+  // Memleket
+  if (!out.hometownMode) out.hometownMode = rng() < 0.6 ? SAME_AS_CITY : 'Farkli bir yer sececegim';
+  if (out.hometownMode !== SAME_AS_CITY) {
+    if (!out.hometownContinent) out.hometownContinent = out.continent;
+    if (!out.hometownCountry) {
+      const list = countriesFor(out.hometownContinent);
+      out.hometownCountry = list.includes(out.country) ? out.country : (list[0] || out.country);
+    }
+    if (!out.hometownCity) {
+      const list = citiesFor(out.hometownCountry);
+      out.hometownCity = list.length ? pick(list).tr : out.hometownCountry;
+    }
+  }
+
+  if (!out.socioeconomic) out.socioeconomic = pick(opts('socioeconomic'));
 
   if (!out.income) {
     // Sosyoekonomik koken gelirle uyumlu olsun.
@@ -417,7 +548,7 @@ function autoFill(answers, rng = deterministicRng(answers)) {
       'Varlikli aile, imkanlar hazir': ['Yuksek gelir, luks erisimi var', 'Cok varlikli'],
       'Gocmen aile, sifirdan kuruldu': ['Kit kanaat geciniyor', 'Orta halli, dengeli', 'Rahat, kendine yatirim yapiyor'],
     };
-    out.income = pick(map[out.socioeconomic] || q('income').options);
+    out.income = pick(map[out.socioeconomic] || opts('income'));
   }
 
   if (!out.home) {
@@ -428,7 +559,7 @@ function autoFill(answers, rng = deterministicRng(answers)) {
       'Yuksek gelir, luks erisimi var': ['Modern luks daire', 'Genis loft'],
       'Cok varlikli': ['Modern luks daire', 'Genis loft', 'Kirsalda tas ev'],
     };
-    out.home = pick(map[out.income] || q('home').options);
+    out.home = pick(map[out.income] || opts('home'));
   }
 
   if (!out.transport) {
@@ -439,40 +570,42 @@ function autoFill(answers, rng = deterministicRng(answers)) {
       'Yuksek gelir, luks erisimi var': ['Yeni bir araba', 'Hep taksi / uygulama'],
       'Cok varlikli': ['Luks araba', 'Hep taksi / uygulama'],
     };
-    out.transport = pick(map[out.income] || q('transport').options);
+    out.transport = pick(map[out.income] || opts('transport'));
   }
 
   if (!out.languages || !out.languages.length) {
-    const local = localLanguage(out.city);
+    const local = localLanguage(out.country);
     const set = new Set(['Ingilizce']);
     if (local) set.add(local);
     out.languages = [...set].slice(0, 3);
   }
 
   for (const question of LIFE_QUESTIONS) {
+    if (question.showIf && !question.showIf(out)) continue;
     if (out[question.key] != null && out[question.key] !== '' &&
         !(Array.isArray(out[question.key]) && !out[question.key].length)) continue;
-    if (question.type === 'multiselect') {
-      out[question.key] = [pick(question.options)];
-    } else if (question.options) {
-      out[question.key] = pick(question.options);
-    }
+    const list = opts(question.key);
+    if (!list || !list.length) continue;
+    out[question.key] = question.type === 'multiselect' ? [pick(list)] : pick(list);
   }
 
   return out;
 }
 
-function localLanguage(cityTr) {
+function localLanguage(country) {
   const map = {
-    'İspanya': 'Ispanyolca', 'İtalya': 'Italyanca', 'Yunanistan': 'Yunanca',
-    'Fransa': 'Fransizca', 'Almanya': 'Almanca', 'Portekiz': 'Portekizce',
+    'Turkiye': 'Turkce', 'İspanya': 'Ispanyolca', 'İtalya': 'Italyanca',
+    'Yunanistan': 'Yunanca', 'Fransa': 'Fransizca', 'Almanya': 'Almanca',
+    'Avusturya': 'Almanca', 'İsviçre': 'Almanca', 'Portekiz': 'Portekizce',
     'Brezilya': 'Portekizce', 'Japonya': 'Japonca', 'Güney Kore': 'Korece',
-    'Çin': 'Cince', 'Hindistan': 'Hintce', 'Rusya': 'Rusca',
+    'Çin': 'Cince', 'Tayvan': 'Cince', 'Hindistan': 'Hintce',
+    'Ukrayna': 'Rusca', 'Kazakistan': 'Rusca', 'Özbekistan': 'Rusca',
     'Meksika': 'Ispanyolca', 'Arjantin': 'Ispanyolca', 'Kolombiya': 'Ispanyolca',
+    'Şili': 'Ispanyolca', 'Peru': 'Ispanyolca',
+    'BAE': 'Arapca', 'Katar': 'Arapca', 'Suudi Arabistan': 'Arapca',
+    'Lübnan': 'Arapca', 'Ürdün': 'Arapca', 'Mısır': 'Arapca',
+    'Fas': 'Arapca', 'Tunus': 'Arapca',
   };
-  if (!cityTr) return null;
-  if (!cityTr.includes(',')) return cityTr.match(/İstanbul|İzmir|Ankara|Antalya|Bodrum|Eskişehir/) ? 'Turkce' : null;
-  const country = cityTr.split(',').pop().trim();
   return map[country] || null;
 }
 
@@ -579,11 +712,42 @@ function enrich(personaBlock, life) {
   };
 }
 
+/**
+ * Kademeli secimleri saklanacak tek etikete cevirir.
+ * city: "Barselona, İspanya" · hometown: ayni bicim veya sehirle ayni.
+ */
+function composePlaces(answers) {
+  const city = cityLabel(answers.cityName, answers.country);
+  const hometown = answers.hometownMode === SAME_AS_CITY || !answers.hometownCity
+    ? city
+    : cityLabel(answers.hometownCity, answers.hometownCountry);
+  return { city, hometown };
+}
+
+/** Kosullu sorular: gorunur olanlari dondurur. */
+function visible(question, answers) {
+  return !question.showIf || question.showIf(answers || {});
+}
+
+/** Secenekleri fonksiyon olan sorulari cozer (kita -> ulke -> sehir). */
+function resolveOptions(question, answers) {
+  if (typeof question.options !== 'function') return question;
+  return { ...question, options: question.options(answers || {}) };
+}
+
 module.exports = {
   LIFE_QUESTIONS,
-  CITIES,
+  SAME_AS_CITY,
+  GEO,
+  continents,
+  countriesFor,
   citiesFor,
+  continentOf,
   cityEn,
+  cityLabel,
+  composePlaces,
+  visible,
+  resolveOptions,
   autoFill,
   dossier,
   enrich,

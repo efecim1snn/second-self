@@ -205,16 +205,16 @@ const ALL_QUESTIONS = [...QUESTIONS, ...life.LIFE_QUESTIONS, ...IDENTITY_QUESTIO
 
 const LIFE_KEYS = new Set(life.LIFE_QUESTIONS.map((q) => q.key));
 
-/** Panelin gostereceği sorular: bolgeye bagli secenekler cozulmus halde. */
+/**
+ * Panelin gostereceği sorular.
+ * - Kosullu sorular elenir (ornek: memleket ayniysa memleket kitasi sorulmaz)
+ * - Fonksiyon olan secenekler cozulur (kita -> ulke -> sehir zinciri)
+ * Panel her cevaptan sonra bunu yeniden ister; boylece zincir hep gunceldir.
+ */
 function questionsFor(answers = {}) {
-  const cities = life.citiesFor(answers.region).map((c) => c.tr);
-  return ALL_QUESTIONS.map((q) => {
-    if (q.type !== 'dynamic-select') return q;
-    const options = q.source === 'cities+same'
-      ? ['Ayni sehir', ...cities]
-      : cities;
-    return { ...q, type: 'select-or-text', options };
-  });
+  return ALL_QUESTIONS
+    .filter((q) => life.visible(q, answers))
+    .map((q) => life.resolveOptions(q, answers));
 }
 
 function sections() {
@@ -288,7 +288,9 @@ function validate(answers) {
   const errors = [];
   const clean = {};
 
-  for (const q of ALL_QUESTIONS) {
+  // Kosullu sorular gorunur degilse dogrulanmaz (memleket ayniysa memleket
+  // kitasi/ulkesi sorulmuyor - zorunlu saymak yanlis olur).
+  for (const q of questionsFor(answers || {})) {
     const raw = answers ? answers[q.key] : undefined;
 
     // Sehir gibi hem listeden secilebilen hem elle yazilabilen alanlar.
@@ -384,8 +386,13 @@ function deriveSeed(identity) {
 /** Temiz cevaplardan hayat blogunu ayirir. */
 function extractLife(clean) {
   const out = {};
-  for (const key of LIFE_KEYS) out[key] = clean[key];
-  if (out.hometown === 'Ayni sehir') out.hometown = out.city;
+  for (const key of LIFE_KEYS) {
+    if (clean[key] !== undefined) out[key] = clean[key];
+  }
+  // Kademeli secimleri tek etikete cevir: "Barselona, İspanya"
+  const places = life.composePlaces(clean);
+  out.city = places.city;
+  out.hometown = places.hometown;
   return out;
 }
 

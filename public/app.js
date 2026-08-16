@@ -132,13 +132,13 @@ async function render() {
 async function loadQuestions() {
   const data = await api('/api/sorular', { answers: S.answers });
   S.questions = data.questions;
-  S.questionsRegion = S.answers.region || null;
 }
 
 async function renderWizard() {
-  if (!S.questions.length || S.questionsRegion !== (S.answers.region || null)) {
-    await loadQuestions();
-  }
+  // Sorular her adimda yeniden istenir: kita -> ulke -> sehir zinciri ve
+  // kosullu sorular (memleket ayniysa memleket sorulari gizlenir) hep
+  // guncel kalsin diye. Yerel istek, gecikmesi yok.
+  await loadQuestions();
   const total = S.questions.length;
   if (S.step >= total) return renderWizardSummary();
 

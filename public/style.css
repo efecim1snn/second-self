@@ -185,6 +185,9 @@ button.tiny { padding: 5px 10px; font-size: 11.5px; }
 /* ------------------------------------------------------------------ modal */
 
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.72); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+/* display:flex, hidden niteliginin display:none'unu eziyordu; modal kutusu
+   hep ekranda kaliyordu (siyah serit gibi gorunuyordu). */
+.modal[hidden] { display: none; }
 .modalbox { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; max-width: 560px; width: 100%; }
 .modalactions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 
