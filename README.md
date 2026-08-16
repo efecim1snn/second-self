@@ -15,7 +15,17 @@ Sıfır bağımlılık. Node.js 18+ dışında hiçbir şey gerekmez.
 - Görselin geldiği tek yer, **bağlı olan görsel üretim API'sidir.**
 
 **İyi haber:** kutudan çıkar çıkmaz çalışır. Varsayılan olarak **Pollinations.ai** bağlı gelir —
-ücretsiz, **API anahtarı bile istemez**. Kurup çalıştırdığın anda ilk vesikalığını üretebilirsin.
+ücretsiz, **API anahtarı bile istemez**. Kurup çalıştırdığın anda ilk karesini üretebilirsin.
+
+> ⚠️ **Ama ücretsiz katmandan fotoğraf gerçekçiliği bekleme.**
+> Pollinations şu an yalnızca `sana` modelini sunuyor ([kontrol et](https://image.pollinations.ai/models)).
+> SANA hız için damıtılmış bir modeldir; cilt gözeneği, ince tüy ve gerçek deri dokusu üretmez —
+> çıktılar pürüzsüz ve "AI çizimi" gibi durur. **Bu prompt'la düzelmez, modelin sınırıdır.**
+> Ücretsiz katman kompozisyon, mekân, poz ve kadraj denemek için iyidir.
+>
+> Gerçekten ayırt edilemeyecek sonuç için **Replicate** (FLUX.1-dev), **fal.ai** veya yerel
+> **Stable Diffusion** (RealVisXL / epiCRealism gibi gerçekçilik modelleri) bağla.
+> Bu üçü aynı zamanda **referans görsel** kabul ettiği için yüzü açılar arasında gerçekten kilitler.
 
 Kaliteyi yükseltmek istediğinde kendi platformunu bağlarsın: Leonardo, OpenAI, Stability, Replicate,
 fal.ai, kendi bilgisayarındaki Stable Diffusion, ComfyUI — ya da listede olmayan herhangi bir şey için
@@ -86,7 +96,17 @@ Mekân karakterin gerçekten yaşadığı şehirden, kıyafet gelir düzeyinden,
 Karakterin günlük ritmine ve mesleğine göre 7 günlük içerik takvimi. Her günün sahnesi hazır;
 "Üret" dediğin an bağlı API'ye gider.
 
-### 5. Sıfırlanır
+### 5. Her şey sonradan değiştirilebilir
+
+**Karakter dosyası** sayfası salt okunur bir özet değil, formun kendisi: 7 bölüm, her alan tek tek
+seçilebilir. Bir alanı değiştirip Kaydet dediğinde karakter hikâyesi, ses rehberi ve prompt'lar
+yeniden üretilir.
+
+- Sadece **hayat** alanları değişirse (gelir, evcil hayvan, meslek…) seed **aynı kalır** — yüz bozulmaz
+- **Görünüş** değişirse seed yeniden hesaplanır ve panel sorar: *"Daha önce ürettiğin vesikalıklar
+  artık bu kişiyi göstermiyor. Kalsın mı, silinip baştan mı üretilsin?"*
+
+### 6. Sıfırlanır
 
 **TÜM VERİYİ SİL** — karakter, vesikalık seti ve tüm görseller gider, sihirbaz sıfırdan başlar.
 Karakter bir kez kilitlendiği için yeni bir insan yaratmanın tek yolu budur.
@@ -120,11 +140,32 @@ Aynı yüzü her seferinde yakalamak dört katmandır:
 3. **Vesikalık seti** — 8 açı, referans destekleyen platformlara gönderilir.
 4. **Platform desteği** — asıl belirleyici olan bu.
 
-> **Dürüst olalım:** ücretsiz Pollinations referans görsel *kabul etmez*. Yapıyı (stüdyo, kadraj,
-> arka plan, poz) doğru kurar ama açılar arasında yüz ve saç kayabilir. Yüzü **gerçekten** kilitlemek
-> için referans görsel alan bir platform gerekir: Replicate/fal.ai (IP-Adapter, redux modelleri),
+> **Dürüst olalım:** ücretsiz Pollinations referans görsel *kabul etmez* ve `sana` modeliyle
+> fotoğraf gerçekçiliği *üretemez*. Yapıyı (stüdyo, kadraj, arka plan, poz) doğru kurar ama
+> açılar arasında yüz ve saç kayar, cilt pürüzsüz kalır. Yüzü **gerçekten** kilitlemek için
+> referans görsel alan bir platform gerekir: Replicate/fal.ai (IP-Adapter, redux modelleri),
 > yerel ComfyUI (IPAdapter FaceID) veya karakter referansı destekleyen bir servis.
-> Panel, bağlı platform referans kabul etmiyorsa seni bu konuda uyarır.
+> Panel, bağlı platform bu ikisini desteklemiyorsa seni açıkça uyarır.
+
+## Gerçekçilik ayarı
+
+Üretim ekranında üç seviye var:
+
+| Seviye | Ne yapar |
+|---|---|
+| **Ultra gerçekçi** (varsayılan) | "Profesyonel çekim" değil, birinin telefonuyla yakaladığı an. Kusurlu ışık, hafif hareket bulanıklığı, doğal mat renkler. En gerçekçi sonucu bu verir. |
+| **Gerçekçi profesyonel** | Fotoğrafçı çekimi: 85mm, sığ alan derinliği, gözlerde net odak. |
+| **Editoryal / moda** | Orta format, kontrollü stüdyo ışığı. |
+
+Üçünde de "AI kokusu" veren ne varsa negatif listede engelleniyor
+(`smooth skin`, `flawless skin`, `retouched`, `beauty filter`, `HDR`, `perfectly symmetrical face`,
+`unreal engine`, `artstation`…), pozitif tarafta cilt gözeneği, ince tüy, hafif yüz asimetrisi,
+kaçak saç telleri ve film greni isteniyor.
+
+**Not:** boy ve vücut ölçüleri prompt'a **sayı olarak girmez**. İki sebep: `24-year-old … 163cm tall`
+gibi yaş+ölçü bitişikliği birçok servisin güvenlik filtresini tetikleyip isteği reddettiriyor
+(ölçülü testle doğrulandı), ve modeller santimetreyi zaten anlamıyor — siluet tarifi
+(`petite`, `tall`, `notably short stature`) çok daha iyi çalışıyor. Sayılar karakter dosyasında durur.
 
 ---
 
@@ -173,9 +214,10 @@ dokümanındaki adresi ve gövde şablonunu bir kez girmen gerekir.
 
 **Ayarlar → Görsel üretim sağlayıcısı**
 
-| Platform | Ne gerekiyor | Referans görsel |
-|---|---|---|
-| **Pollinations.ai** (varsayılan) | Hiçbir şey — ücretsiz, anahtarsız | ✗ |
+| Platform | Ne gerekiyor | Referans görsel | Fotoğraf gerçekçiliği |
+|---|---|---|---|
+| **Pollinations.ai** (varsayılan) | Hiçbir şey — ücretsiz, anahtarsız | ✗ | ✗ (`sana` modeli) |
+| Replicate / fal.ai / yerel SD | Anahtar veya GPU | ✓ | ✓ |
 | Leonardo.ai | API Key | ✗ (panelde elle) |
 | OpenAI (gpt-image / DALL·E 3) | API Key | ✗ |
 | Stability AI | API Key | ✗ |
@@ -250,7 +292,7 @@ src/
   life.js              şehir havuzu, hayat soruları, tutarlı otomatik doldurma, karakter dosyası
   traits.js            ayırt edici özellikler + RİSK seviyeleri ve uyarıları
   persona.js           burç/eğitim/ilgi alanı → kişilik, ses rehberi, içerik sütunları
-  reference.js         8 açılı vesikalık seti
+  reference.js         karakter sayfası + 8 açılı vesikalık seti
   brief.js             serbest istek → sahne, haftalık plan
   promptcraft.js       kilitli kimlik → her platformun diline göre prompt
   scenes.js            poz/kıyafet/ortam/ışık üretimi
@@ -285,8 +327,13 @@ that into a scene consistent with the character's life.
 
 **It does not generate images itself and ships with no stock imagery.** It crafts the best prompt in the
 dialect of whichever image API you connect and saves what that API returns. **Pollinations.ai is wired in
-by default — free, no API key** — so it works out of the box; connect Leonardo, OpenAI, Stability,
-Replicate, fal.ai, local Automatic1111/ComfyUI, or anything else via the **Custom API** adapter for
-better quality and true face-locking via reference images.
+by default — free, no API key** — so it works out of the box.
+
+⚠️ **The free tier cannot do photorealism.** Pollinations currently serves only the `sana` model, a
+speed-distilled model that does not render skin pores or real skin texture — output looks smooth and
+obviously AI. That is a model limit, not a prompt problem. Use the free tier to test composition,
+location, pose and framing. For genuinely indistinguishable results connect **Replicate** (FLUX.1-dev),
+**fal.ai** or local **Stable Diffusion** (RealVisXL / epiCRealism) — these also accept reference images,
+which is what actually locks the face across angles.
 
 `node server.js` → `http://localhost:4200`. Reset with `node reset.js --confirm`. MIT.
