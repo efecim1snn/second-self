@@ -436,6 +436,7 @@ const routes = {
     return {
       scenes: scenes.suggest(character, Math.min(Math.max(Number(body.count) || 12, 1), 40)),
       options: scenes.options(),
+      realism: promptcraft.realismOptions(),
     };
   },
 

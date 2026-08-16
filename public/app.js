@@ -736,9 +736,11 @@ async function renderProduction() {
     const data = await api('/api/sahneler', { count: 12 });
     S.scenes = data.scenes;
     S.scene = S.scenes[0];
+    S.realismOptions = data.realism || [];
   }
   const generates = S.status.provider.generates;
   const ref = S.status.reference;
+  if (!S.realism) S.realism = 'ultra';
 
   view.innerHTML = `
     <h1>Uretim</h1>
@@ -747,6 +749,16 @@ async function renderProduction() {
 
     ${ref && !ref.complete ? `<div class="notice warn">
       <b>Vesikalik seti eksik (${ref.done}/${ref.total}).</b> Once onu tamamlaman tutarliligi ciddi artirir.
+    </div>` : ''}
+
+    ${S.status.provider.active === 'pollinations' ? `<div class="notice bad">
+      <b>Ucretsiz saglayici FOTOGRAF GERCEKCILIGI veremez.</b><br>
+      Pollinations su an yalnizca <span class="mono">sana</span> modelini sunuyor. SANA hiz icin
+      damitilmis bir modeldir; cilt gozenegi, ince tuy ve gercek deri dokusu uretmez - ciktilar
+      puruzsuz ve "AI cizimi" gibi durur. <b>Bu prompt ile duzelmez, modelin sinirdir.</b><br><br>
+      Kompozisyon, mekan, poz ve kadraj denemek icin kullan. Gercekten ayirt edilemeyecek sonuc icin
+      Ayarlar'dan <b>Replicate</b> (FLUX.1-dev), <b>fal.ai</b> veya yerel <b>Stable Diffusion</b>
+      (RealVisXL / epiCRealism gibi gercekcilik modelleri) bagla.
     </div>` : ''}
 
     <div class="card">
@@ -783,6 +795,13 @@ async function renderProduction() {
             <option value="square">Kare (1:1)</option>
             <option value="wide">Yatay (16:9)</option>
           </select>
+        </div>
+        <div class="field">
+          <label>Gercekcilik</label>
+          <select id="f_realism">
+            ${(S.realismOptions || []).map((o) => `<option value="${esc(o.key)}" ${S.realism === o.key ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+          </select>
+          <p class="help">Ultra = "AI portresi" degil, birinin telefonuyla cektigi an gibi. En gercekci sonucu bu verir.</p>
         </div>
         <div class="field"><label>Ek detay</label><input id="f_extra" value="${esc(S.scene.extra || '')}" placeholder="istedigin ekstra tarif"></div>
         <div class="field"><label>Kac adet</label><input id="f_count" type="number" min="1" max="4" value="1"></div>
@@ -825,6 +844,7 @@ async function renderProduction() {
   };
 
   function currentScene() {
+    S.realism = document.getElementById('f_realism').value;
     return {
       ...S.scene,
       shot: document.getElementById('f_shot').value,
@@ -835,6 +855,7 @@ async function renderProduction() {
       lighting: document.getElementById('f_lighting').value,
       aspect: document.getElementById('f_aspect').value,
       extra: document.getElementById('f_extra').value,
+      realism: S.realism,
     };
   }
 }

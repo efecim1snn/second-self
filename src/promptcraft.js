@@ -164,32 +164,97 @@ const NEGATIVE = [
   // aktif olarak engelleniyorlar.
   'tattoo', 'tattoos', 'tattooed skin', 'body art',
   'freckles', 'freckled skin', 'blotchy skin', 'skin blemishes', 'acne',
+  // "AI kokusu" veren her sey. Bu blok gercekciligin yarisini tek basina
+  // halleder: model yapay zeka portresi refleksine kaydigi anda geri ceker.
+  'smooth skin', 'flawless skin', 'perfect skin', 'glossy skin', 'poreless skin',
+  'retouched', 'photoshopped', 'beauty filter', 'instagram filter', 'face filter',
+  'airbrush', 'HDR', 'oversharpened', 'overprocessed', 'vibrant oversaturated colors',
+  'perfectly symmetrical face', 'mannequin', 'doll face', 'unreal engine',
+  'octane render', 'artstation', 'digital painting', 'concept art', 'ai generated look',
+  'perfect hair', 'every hair in place', 'studio perfect lighting',
 ];
 
+/* ------------------------------------------------------- GERCEKCILIK ---- */
+
 /**
- * Negatif prompt DESTEKLEMEYEN lehcelerde (FLUX, DALL-E) dovme/cil'i
- * engellemenin yolu olumlu ifadedir: "dovme yok" demek yerine cildi
- * "temiz ve duz tonlu" diye tarif etmek. Olumsuzlama bu modellerde bazen
- * ters teper (kelimeyi gorup nesneyi cizerler).
+ * "AI kokusunu" yok eden sey cozunurluk degil, KUSURDUR.
+ *
+ * Yapay zeka goruntusunu ele veren tipik isaretler:
+ *   puruzsuz mumsu cilt · kusursuz simetri · kusursuz isik · asiri guzel
+ *   yuz hatlari · film grenisiz temizlik · her teli yerinde sac · fazla
+ *   parlak gozler · HDR gibi doygun renkler
+ *
+ * Karsi ilac: gozenek, ince tuy, hafif asimetri, kacak sac telleri, gercek
+ * lens/film kusurlari ve "profesyonel cekim" degil "an yakalanmis" his.
+ *
+ * Not: dovme ve cil hala engellidir (bkz. NEGATIVE). "Isaretsiz cilt" ile
+ * "dokusuz cilt" ayni sey degil - gozenek ve ton dalgalanmasi kalir,
+ * dovme/cil kalmaz.
  */
-const CLEAN_SKIN = 'clear even-toned skin with no markings';
+const SKIN_REAL = 'natural skin texture with visible pores, fine vellus hair and subtle tonal unevenness, unmarked skin';
+
+const IMPERFECTION = 'slight natural facial asymmetry, a few loose flyaway hairs, no retouching';
+
+/** Gercekcilik seviyeleri - kullanici Uretim ekranindan secer. */
+const REALISM = {
+  // Varsayilan. En cok "gercek insan" hissi veren yol: profesyonel cekim
+  // gibi degil, birinin telefonuyla cektigi an gibi gorunmek.
+  ultra: {
+    label: 'Ultra gercekci (telefonla cekilmis gibi)',
+    sentences: [
+      'This is a candid, unposed amateur snapshot taken on a modern smartphone camera, not a professional photoshoot.',
+      `${SKIN_REAL}. ${IMPERFECTION}.`,
+      'Imperfect available light, slightly imperfect framing, very subtle motion blur, natural muted colours, no HDR, no beauty filter, no retouching.',
+    ],
+    tags: [
+      '(RAW candid photo:1.3)', '(photorealistic:1.3)', 'amateur smartphone snapshot',
+      'skin texture', 'skin pores', 'subsurface scattering', 'imperfect skin',
+      'natural available light', 'slight motion blur', 'muted natural colours',
+      'no retouching', 'film grain',
+    ],
+    mj: ['candid amateur phone photo', 'natural skin texture', 'unretouched', 'imperfect lighting'],
+  },
+  pro: {
+    label: 'Gercekci profesyonel (fotografci cekimi)',
+    sentences: [
+      'Photographed by a professional on a Canon EOS R5 with an 85mm f/1.4 lens.',
+      `${SKIN_REAL}. ${IMPERFECTION}.`,
+      'Realistic colour grading, shallow depth of field, sharp focus on the eyes, subtle film grain, no beauty filter, no over-sharpening.',
+    ],
+    tags: [
+      '(RAW photo:1.3)', '(photorealistic:1.3)', 'Canon EOS R5', '85mm f/1.4',
+      'skin texture', 'skin pores', 'subsurface scattering',
+      'shallow depth of field', 'sharp focus on eyes', 'film grain', 'no retouching',
+    ],
+    mj: ['photorealistic', 'shot on Canon EOS R5 85mm', 'natural skin texture', 'unretouched'],
+  },
+  editorial: {
+    label: 'Editoryal / moda',
+    sentences: [
+      'An editorial fashion photograph shot on a medium format camera.',
+      `${SKIN_REAL}.`,
+      'Controlled studio lighting, realistic colour, sharp focus, high detail, minimal retouching.',
+    ],
+    tags: [
+      '(editorial fashion photo:1.2)', '(photorealistic:1.2)', 'medium format',
+      'skin texture', 'skin pores', 'studio lighting', 'high detail', 'minimal retouching',
+    ],
+    mj: ['editorial fashion photograph', 'medium format', 'natural skin texture'],
+  },
+};
+
+function realismOf(scene) {
+  return REALISM[scene.realism] || REALISM.ultra;
+}
 
 const QUALITY = {
-  photo: [
-    'photorealistic', 'natural skin texture with visible pores', CLEAN_SKIN,
-    'candid photograph', 'shot on 85mm lens', 'shallow depth of field',
-    'sharp focus on the eyes', 'realistic color grading', 'high detail',
-  ],
-  editorial: [
-    'editorial fashion photograph', 'studio quality', 'natural skin texture', CLEAN_SKIN,
-    'shot on medium format camera', 'sharp focus', 'high detail',
-  ],
-  // Vesikalik seti: kimligi tanimlayan kare. Sanatsal hicbir sey istemiyoruz.
+  // Vesikalik seti: kimligi tanimlayan kare. Duz isik gercek bir kimlik
+  // fotografinin kendisidir, ama cilt yine gercek dokuda olmali.
   reference: [
-    'photorealistic', 'natural skin texture with visible pores', CLEAN_SKIN,
+    'photorealistic', SKIN_REAL, IMPERFECTION,
     'sharp focus across the whole face', 'evenly lit', 'no makeup styling',
     'no jewellery', 'no accessories', 'shot on 85mm lens at f/8',
-    'full face in focus', 'high detail', 'identification photo',
+    'full face in focus', 'high detail', 'unretouched identification photo',
   ],
 };
 
@@ -242,11 +307,20 @@ function physicalCore(identity, options = {}) {
     ].filter(Boolean).join(', ');
   }
 
+  // Boy ve olculer prompt'a SAYI olarak girmez.
+  // Iki sebep: (1) "24-year-old ... 163cm tall" gibi yas+olcu bitisikligi
+  // bircok servisin guvenlik filtresini tetikliyor ve istek 500 donuyor
+  // (Pollinations'ta olculu testle dogrulandi), (2) modeller santimetreyi
+  // zaten anlamiyor - siluet tarifi cok daha iyi calisiyor.
+  // Sayilar karakter dosyasinda aynen duruyor, sadece prompt'a girmiyor.
   const m = identity.measurements || {};
   const stature = [];
-  if (m.height_cm) stature.push(`${m.height_cm}cm tall`);
-  if (m.bust_cm && m.waist_cm && m.hips_cm) {
-    stature.push(`${m.bust_cm}-${m.waist_cm}-${m.hips_cm} proportions`);
+  const h = Number(m.height_cm);
+  if (h) {
+    if (h < 140) stature.push('notably short stature');
+    else if (h < 158) stature.push('petite');
+    else if (h > 185) stature.push('very tall');
+    else if (h > 175) stature.push('tall');
   }
 
   // DIKKAT: bolge tarifi bilerek DISARIDA birakildi.
@@ -303,7 +377,8 @@ function buildReferencePrompt(identity, scene, dialect) {
       `${capitalise(scene.pose)}.`,
       'They are wearing a plain white crew-neck t-shirt.',
       'Flat, even studio lighting with no harsh shadows and no coloured light.',
-      `Photorealistic, natural skin texture with visible pores, ${CLEAN_SKIN}, sharp focus across the whole face, high detail.`,
+      `Photorealistic and unretouched: ${SKIN_REAL}. ${IMPERFECTION}. Sharp focus across the whole face, high detail.`,
+      'It must look like a real photograph of a real person, not a digital rendering.',
       'The background is completely empty - no scenery, no furniture, no props, no jewellery.',
     ].join(' ');
   }
@@ -314,7 +389,8 @@ function buildReferencePrompt(identity, scene, dialect) {
     scene.shot, scene.pose,
     core,
     'plain white crew-neck t-shirt', 'flat even studio lighting', 'no shadows',
-    'photorealistic', 'natural skin texture with visible pores', CLEAN_SKIN,
+    '(RAW photo:1.3)', '(photorealistic:1.3)', SKIN_REAL, IMPERFECTION,
+    'subsurface scattering', 'film grain', 'unretouched',
     'sharp focus on the face', 'high detail',
   ].filter(Boolean).join(', ');
 }
@@ -453,7 +529,8 @@ function build(character, scene = {}, dialect = 'generic') {
     ? (character.seed + scene.seedOffset) % 2147483647
     : character.seed;
   const words = sceneWords(scene);
-  const quality = QUALITY[scene.style] || QUALITY.photo;
+  const real = realismOf(scene);
+  const quality = QUALITY[scene.style] || real.tags;
   const extra = scene.extra ? String(scene.extra).trim() : '';
   const spec = DIALECTS[dialect] || DIALECTS.generic;
 
@@ -496,7 +573,7 @@ function build(character, scene = {}, dialect = 'generic') {
 
   switch (dialect) {
     case 'midjourney': {
-      prompt = [core, ...words, ...quality, extra].filter(Boolean).join(', ');
+      prompt = [core, ...words, ...real.mj, ...quality, extra].filter(Boolean).join(', ');
       const flags = [`--ar ${aspect.mj}`, '--style raw', '--v 7', `--seed ${seed}`];
       if (character.reference && character.reference.publicUrl) {
         flags.push(`--cref ${character.reference.publicUrl}`, '--cw 100');
@@ -508,7 +585,7 @@ function build(character, scene = {}, dialect = 'generic') {
     case 'leonardo': {
       prompt = [
         `A ${core}, ${words.join(', ')}.`,
-        `${quality.join(', ')}.`,
+        real.sentences.join(' '),
         extra,
       ].filter(Boolean).join(' ');
       params.negative_prompt = negative;
@@ -521,11 +598,9 @@ function build(character, scene = {}, dialect = 'generic') {
 
     case 'sdxl': {
       prompt = [
-        '(RAW photo:1.2)', '(photorealistic:1.2)',
+        ...quality,
         core,
         ...words,
-        'natural skin texture', 'visible skin pores', 'film grain',
-        '85mm f/1.8', 'sharp focus on eyes', 'high detail',
         extra,
       ].filter(Boolean).join(', ');
       params.negative_prompt = negative;
@@ -551,7 +626,7 @@ function build(character, scene = {}, dialect = 'generic') {
         ].filter(Boolean).join(', ') + '.',
         scene.lighting ? `${capitalise(scene.lighting)}.` : '',
         extra ? `${extra}.` : '',
-        `Photorealistic, natural skin texture with visible pores, ${CLEAN_SKIN}, realistic colour grading, shot on an 85mm lens, sharp focus on the eyes.`,
+        real.sentences.join(' '),
       ].filter((s) => s && s !== '.').join(' ');
       params.seed = seed;
       params.width = aspect.wh[0];
@@ -572,9 +647,10 @@ function build(character, scene = {}, dialect = 'generic') {
       ].filter(Boolean).join(' ');
 
       prompt = [
-        `A realistic photograph of a ${core}.`,
+        `A photograph of a ${core}.`,
         sentences,
-        'The photograph looks candid and natural, with realistic skin texture, soft natural lighting and shallow depth of field. Do not add any text or watermark.',
+        real.sentences.join(' '),
+        'It must look like a real photograph of a real person, not a digital rendering. Do not add any text or watermark.',
         extra,
       ].filter(Boolean).join(' ');
       params.size = aspectKey === 'square' ? '1024x1024' : (aspectKey === 'wide' ? '1792x1024' : '1024x1792');
@@ -584,7 +660,7 @@ function build(character, scene = {}, dialect = 'generic') {
     case 'higgsfield': {
       prompt = [
         `${core}, ${words.join(', ')}.`,
-        `${quality.join(', ')}.`,
+        real.sentences.join(' '),
         extra,
       ].filter(Boolean).join(' ');
       params.negative_prompt = negative;
@@ -597,7 +673,7 @@ function build(character, scene = {}, dialect = 'generic') {
     }
 
     default: {
-      prompt = [core, ...words, ...quality, extra].filter(Boolean).join(', ');
+      prompt = [core, ...words, ...real.mj, ...quality, extra].filter(Boolean).join(', ');
       params.negative_prompt = negative;
       params.seed = seed;
       params.width = aspect.wh[0];
@@ -641,4 +717,6 @@ module.exports = {
   DIALECTS,
   ASPECT,
   NEGATIVE,
+  REALISM,
+  realismOptions: () => Object.entries(REALISM).map(([key, v]) => ({ key, label: v.label })),
 };

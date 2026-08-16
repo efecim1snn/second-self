@@ -1,6 +1,6 @@
 'use strict';
 
-const { fetchBinary } = require('./helpers');
+const { fetchBinary, sleep } = require('./helpers');
 
 /**
  * POLLINATIONS.AI - ucretsiz, API anahtari GEREKTIRMEYEN saglayici.
@@ -17,18 +17,18 @@ module.exports = {
   label: 'Pollinations.ai (UCRETSIZ - anahtar gerekmez)',
   dialect: 'flux',
   docs: 'https://github.com/pollinations/pollinations/blob/master/APIDOCS.md',
-  blurb: 'Ucretsiz ve API anahtari istemez - kurulumdan hemen sonra calisir. FLUX modeli, seed destegi var. Yogun saatlerde yavaslayabilir; kalite tavani ucretli platformlardan dusuktur.',
+  blurb: 'Ucretsiz ve API anahtari istemez - kurulumdan hemen sonra calisir. AMA: su an yalnizca "sana" modelini sunuyor. SANA hiz icin damitilmis bir model; cilt gozenegi, ince tuy ve gercek deri dokusu uretemez. Kompozisyon/mekan/poz denemek icin iyidir, FOTOGRAF GERCEKCILIGI icin yetersizdir. Ultra gercekci sonuc istiyorsan Replicate, fal.ai veya yerel Stable Diffusion bagla.',
   supportsReference: false,
   needs: 'Hicbir sey - ucretsiz, anahtar istemez',
   keyUrl: null,
+  photoreal: false,
   fields: [
     {
       key: 'model',
       label: 'Model',
-      type: 'select',
-      options: ['flux', 'turbo'],
-      default: 'flux',
-      help: 'flux = daha gercekci ve yavas · turbo = daha hizli ve daha stilize. Portre icin flux.',
+      type: 'text',
+      default: 'sana',
+      help: 'Pollinations su an tek model sunuyor: "sana". Guncel listeyi https://image.pollinations.ai/models adresinden gorebilirsin; yeni bir model eklerlerse adini buraya yaz.',
     },
     {
       key: 'nologo',
@@ -49,7 +49,7 @@ module.exports = {
     const params = new URLSearchParams({
       width: String(Math.round(Number(width) || 864)),
       height: String(Math.round(Number(height) || 1080)),
-      model: config.model || 'flux',
+      model: config.model || 'sana',
       nologo: config.nologo === false ? 'false' : 'true',
       enhance: config.enhance ? 'true' : 'false',
       private: 'true',
@@ -59,19 +59,34 @@ module.exports = {
 
     const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?${params.toString()}`;
 
+    // Ucretsiz servis duzensiz 500 donuyor (yuk / hiz siniri). Uzunluk veya
+    // prompt ile ilgisi yok - ayni istek birkac saniye sonra basariyla
+    // donebiliyor. O yuzden artan bekleme ile birkac kez deneniyor.
     let buffer;
-    try {
-      buffer = await fetchBinary(url, {
-        headers: { 'accept': 'image/*', 'user-agent': 'ai-influencer-otomasyon' },
-      }, 240000);
-    } catch (err) {
-      if (/HTTP 5\d\d/.test(err.message)) {
-        throw new Error('Pollinations su an mesgul veya hata dondurdu. Birkac saniye sonra tekrar dene. (Ucretsiz servis, yogun saatlerde kuyruga girer.)');
+    let lastError;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (attempt > 0) await sleep(attempt * 6000);
+      try {
+        buffer = await fetchBinary(url, {
+          headers: { 'accept': 'image/*', 'user-agent': 'ai-influencer-otomasyon' },
+        }, 240000);
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        if (/fetch failed|ENOTFOUND|ETIMEDOUT/i.test(err.message)) {
+          throw new Error('Pollinations\'a ulasilamadi. Internet baglantini kontrol et.');
+        }
+        if (!/HTTP 5\d\d|HTTP 429/.test(err.message)) throw err;
       }
-      if (/fetch failed|ENOTFOUND|ETIMEDOUT/i.test(err.message)) {
-        throw new Error('Pollinations\'a ulasilamadi. Internet baglantini kontrol et.');
-      }
-      throw err;
+    }
+
+    if (lastError) {
+      throw new Error(
+        'Pollinations 5 denemede de yanit vermedi. Ucretsiz servis yogun oldugunda ' +
+        'boyle olur - birkac dakika sonra tekrar dene, ya da Ayarlar\'dan kendi ' +
+        'API\'ni bagla (kesintisiz ve daha kaliteli olur).'
+      );
     }
 
     if (!buffer || buffer.length < 1000) {
@@ -82,7 +97,7 @@ module.exports = {
     const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8;
     return {
       images: [{ buffer, mime: isJpeg ? 'image/jpeg' : 'image/png' }],
-      raw: { model: config.model || 'flux' },
+      raw: { model: config.model || 'sana' },
     };
   },
 };
