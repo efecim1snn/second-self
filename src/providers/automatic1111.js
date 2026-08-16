@@ -36,15 +36,17 @@ module.exports = {
     },
   ],
 
-  async generate({ config, prompt, negative, seed, width, height, count = 1, referenceBase64 }) {
+  async generate({ config, prompt, negative, seed, width, height, count = 1, referenceBase64, engine }) {
     const base = (config.baseUrl || 'http://127.0.0.1:7860').replace(/\/$/, '');
 
+    // Gercekcilik seviyesinin ayarlari kullanicinin elle girdigi degerleri
+    // ezmez; kullanici bos biraktiysa seviyeden gelen deger kullanilir.
     const payload = {
       prompt,
       negative_prompt: negative || '',
       seed: seed == null ? -1 : Number(seed),
-      steps: Number(config.steps) || 30,
-      cfg_scale: Number(config.cfg) || 5,
+      steps: Number(config.steps) || (engine && engine.steps) || 30,
+      cfg_scale: Number(config.cfg) || (engine && engine.cfg) || 5,
       sampler_name: config.sampler || 'DPM++ 2M Karras',
       width: Number(width) || 832,
       height: Number(height) || 1216,

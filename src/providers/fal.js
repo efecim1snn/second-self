@@ -36,7 +36,7 @@ module.exports = {
     },
   ],
 
-  async generate({ config, prompt, negative, seed, width, height, count = 1, referenceDataUri }) {
+  async generate({ config, prompt, negative, seed, width, height, count = 1, referenceDataUri, engine }) {
     if (!config.apiKey) throw new Error('fal.ai API Key girilmemis.');
     const model = (config.model || 'fal-ai/flux/dev').replace(/^\/|\/$/g, '');
 
@@ -47,6 +47,16 @@ module.exports = {
     };
     if (seed != null) input.seed = Number(seed);
     if (negative) input.negative_prompt = negative;
+
+    // Gercekcilik seviyesinin motor ayarlari (bkz. promptcraft.REALISM.engine).
+    if (engine) {
+      if (engine.guidance != null) {
+        input.guidance_scale = engine.guidance;
+      }
+      if (engine.steps != null) {
+        input.num_inference_steps = engine.steps;
+      }
+    }
     if (width && height) input.image_size = { width: Number(width), height: Number(height) };
     if (config.referenceField && referenceDataUri) input[config.referenceField] = referenceDataUri;
 

@@ -144,4 +144,47 @@ function status(character) {
   };
 }
 
-module.exports = { ANGLES, BASE_SCENE, sceneFor, list, primaryKey, status };
+/**
+ * Sahneye en uygun referans kareyi secer.
+ *
+ * Eskiden her uretimde SADECE birincil (onden) kare gonderiliyordu:
+ * profil karesi isterken bile modele onden vesikalik gidiyordu ve model
+ * celisen iki sinyal aliyordu (metin "yandan" diyor, referans "onden"
+ * gosteriyor). 8 acilik setin geri kalani hic kullanilmiyordu.
+ *
+ * Simdi sahnenin pozundaki yon ipuclarina gore aci esleniyor.
+ */
+const DIRECTION_HINTS = [
+  { test: /full (left )?profile|90 degree left|side profile.*left/i, angle: 'profile_left' },
+  { test: /full (right )?profile|90 degree right/i, angle: 'profile_right' },
+  { test: /\bprofile\b|side view|from the side/i, angle: 'profile_left' },
+  { test: /turned .*left|three-quarter.*left|looking over .*left/i, angle: 'quarter_left' },
+  { test: /turned .*right|three-quarter.*right|over the shoulder/i, angle: 'quarter_right' },
+  { test: /from behind|back of the head|rear view/i, angle: 'back_quarter' },
+  { test: /from (slightly )?below|low angle|chin (slightly )?raised/i, angle: 'tilt_up' },
+  { test: /from (slightly )?above|high angle|chin (slightly )?lowered/i, angle: 'tilt_down' },
+];
+
+function pickReference(character, scene = {}) {
+  const set = (character && character.referenceSet) || {};
+  const has = (key) => set[key] && set[key].filename;
+
+  // Vesikalik uretiliyorsa kendi karesini referans alma - kendi kopyasindan
+  // aci uretilemez.
+  if (scene.style === 'reference') {
+    return has('front') && scene.angle !== 'front' ? set.front.filename : null;
+  }
+
+  const text = `${scene.pose || ''} ${scene.shot || ''}`;
+  for (const hint of DIRECTION_HINTS) {
+    if (hint.test.test(text) && has(hint.angle)) return set[hint.angle].filename;
+  }
+
+  // Yon ipucu yoksa: birincil kare, yoksa onden, yoksa elde ne varsa.
+  if (character.reference && character.reference.filename) return character.reference.filename;
+  if (has('front')) return set.front.filename;
+  const first = Object.values(set).find((s) => s && s.filename);
+  return first ? first.filename : null;
+}
+
+module.exports = { ANGLES, BASE_SCENE, sceneFor, list, primaryKey, status, pickReference };

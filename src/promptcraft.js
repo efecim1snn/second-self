@@ -196,11 +196,20 @@ const SKIN_REAL = 'natural skin texture with visible pores, fine vellus hair and
 const IMPERFECTION = 'slight natural facial asymmetry, a few loose flyaway hairs, no retouching';
 
 /** Gercekcilik seviyeleri - kullanici Uretim ekranindan secer. */
+/**
+ * MOTOR AYARLARI - kelimelerden daha cok etki eden kisim.
+ *
+ * FLUX'ta mumsu/plastik cilt hissinin en buyuk tek sebebi yuksek guidance.
+ * Varsayilan 3.5'tir; 2.2-2.8 araliginda gozenek ve doku gorunur sekilde
+ * geliyor. Bu degerler saglayiciya GERCEKTEN gonderilmeli - eskiden
+ * hesaplanip yolda dusuruluyordu.
+ */
 const REALISM = {
   // Varsayilan. En cok "gercek insan" hissi veren yol: profesyonel cekim
   // gibi degil, birinin telefonuyla cektigi an gibi gorunmek.
   ultra: {
     label: 'Ultra gercekci (telefonla cekilmis gibi)',
+    engine: { guidance: 2.4, steps: 32, cfg: 4.5 },
     sentences: [
       'This is a candid, unposed amateur snapshot taken on a modern smartphone camera, not a professional photoshoot.',
       `${SKIN_REAL}. ${IMPERFECTION}.`,
@@ -216,6 +225,7 @@ const REALISM = {
   },
   pro: {
     label: 'Gercekci profesyonel (fotografci cekimi)',
+    engine: { guidance: 3.0, steps: 30, cfg: 5 },
     sentences: [
       'Photographed by a professional on a Canon EOS R5 with an 85mm f/1.4 lens.',
       `${SKIN_REAL}. ${IMPERFECTION}.`,
@@ -230,6 +240,7 @@ const REALISM = {
   },
   editorial: {
     label: 'Editoryal / moda',
+    engine: { guidance: 3.5, steps: 28, cfg: 6 },
     sentences: [
       'An editorial fashion photograph shot on a medium format camera.',
       `${SKIN_REAL}.`,
@@ -258,8 +269,11 @@ const QUALITY = {
   ],
 };
 
+// Tum olculer 16'nin kati olmali - difuzyon modelleri latent uzayda 8/16
+// kat kucultuyor, bolunmeyen olcude kenar bozulmasi ve detay kaybi oluyor.
+// Eski deger 864x1080 idi; 1080 sayisi 16'ya bolunmuyor.
 const ASPECT = {
-  'post': { label: 'Instagram post (4:5)', mj: '4:5', wh: [864, 1080] },
+  'post': { label: 'Instagram post (4:5)', mj: '4:5', wh: [896, 1120] },
   'story': { label: 'Story / Reel (9:16)', mj: '9:16', wh: [768, 1344] },
   'square': { label: 'Kare (1:1)', mj: '1:1', wh: [1024, 1024] },
   'wide': { label: 'Yatay (16:9)', mj: '16:9', wh: [1344, 768] },
@@ -605,8 +619,8 @@ function build(character, scene = {}, dialect = 'generic') {
       ].filter(Boolean).join(', ');
       params.negative_prompt = negative;
       params.seed = seed;
-      params.steps = 30;
-      params.cfg_scale = 5;
+      params.steps = real.engine.steps;
+      params.cfg_scale = real.engine.cfg;
       params.sampler = 'DPM++ 2M Karras';
       params.width = aspect.wh[0];
       params.height = aspect.wh[1];
@@ -692,6 +706,10 @@ function build(character, scene = {}, dialect = 'generic') {
     width: aspect.wh[0],
     height: aspect.wh[1],
     params,
+    // Motor ayarlari: saglayiciya AYRICA gonderilir. Eskiden params icinde
+    // hesaplanip yolda dusuruluyordu, model varsayilanlariyla calisiyordu.
+    engine: { ...real.engine },
+    realism: scene.realism || 'ultra',
     notes: spec.notes,
     core,
   };

@@ -150,12 +150,22 @@ function activeProvider() {
   return { cfg, spec, config: (cfg.entries && cfg.entries[spec.id]) || {} };
 }
 
-function referencePayload(character) {
-  if (!character.reference || !character.reference.filename) return {};
-  const buffer = store.readImageBuffer(character.reference.filename);
+/**
+ * Sahneye uygun referans kareyi yukler.
+ * Eskiden yalnizca birincil kare gonderiliyordu; artik vesikalik setinden
+ * sahnenin acisina en yakin kare seciliyor (bkz. reference.pickReference).
+ */
+function referencePayload(character, scene) {
+  const filename = reference.pickReference(character, scene || {});
+  if (!filename) return {};
+  const buffer = store.readImageBuffer(filename);
   if (!buffer) return {};
   const b64 = buffer.toString('base64');
-  return { referenceBase64: b64, referenceDataUri: `data:image/png;base64,${b64}` };
+  return {
+    referenceBase64: b64,
+    referenceDataUri: `data:image/png;base64,${b64}`,
+    referenceFile: filename,
+  };
 }
 
 /**
@@ -200,7 +210,12 @@ async function generateScene(character, scene, count = 1) {
     size: built.params.size || `${built.width}x${built.height}`,
     aspectRatio: aspectMeta.mj,
     count: Math.min(Math.max(Number(count) || 1, 1), 4),
-    ...(spec.supportsReference ? referencePayload(character) : {}),
+    // Motor ayarlari (guidance/steps/cfg) - eskiden burada dusuruluyordu ve
+    // model kendi varsayilaniyla calisiyordu. FLUX'ta plastik cildin bir
+    // numarali sebebi buydu.
+    engine: built.engine,
+    params: built.params,
+    ...(spec.supportsReference ? referencePayload(character, effectiveScene) : {}),
   });
 
   const saved = [];
@@ -725,10 +740,64 @@ function notFound(message) {
 
 /* ------------------------------------------------------------------ sunucu */
 
+/**
+ * YEREL PANEL KAPISI
+ *
+ * Bu sunucu senin bilgisayarinda calisiyor ama tarayicin acikken ziyaret
+ * ettigin HERHANGI bir web sitesi de ona istek atabilir. Korumasiz birakirsan
+ * kotu niyetli bir sayfa:
+ *   - POST /api/sifirla ile karakterini ve tum gorsellerini silebilir,
+ *   - aktif saglayiciyi "custom" yapip URL'yi kendi sunucusuna cevirerek
+ *     bundan sonraki her prompt'u ve yuz verisini disari tasiyabilir.
+ * Teorik degil, klasik bir yerel panel acigi.
+ *
+ * Uc katman:
+ *  1. Host yalnizca localhost olabilir (DNS rebinding'i keser).
+ *  2. Yazma isteklerinde Origin / Sec-Fetch-Site ayni kaynak olmali.
+ *  3. API yazma istekleri application/json olmali - basit bir HTML formu
+ *     bu basligi CORS on-kontrolune takilmadan gonderemez.
+ */
+const ALLOWED_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+
+function denyRequest(req, pathname) {
+  const host = String(req.headers.host || '').replace(/:\d+$/, '').toLowerCase();
+  if (!ALLOWED_HOSTS.has(host)) {
+    return { status: 403, message: 'Bu panel yalnizca localhost uzerinden acilabilir.' };
+  }
+
+  if (req.method === 'GET' || req.method === 'HEAD') return null;
+
+  const site = req.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin' && site !== 'none') {
+    return { status: 403, message: 'Baska bir sitenin istegi reddedildi.' };
+  }
+
+  const origin = req.headers.origin;
+  if (origin) {
+    const ok = [`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`].includes(origin);
+    if (!ok) return { status: 403, message: 'Gecersiz Origin.' };
+  }
+
+  if (pathname.startsWith('/api/')) {
+    const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+    if (type !== 'application/json') {
+      return { status: 415, message: 'API istekleri application/json olmali.' };
+    }
+  }
+
+  return null;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const pathname = decodeURIComponent(url.pathname);
   const key = `${req.method} ${pathname}`;
+
+  const denied = denyRequest(req, pathname);
+  if (denied) {
+    res.writeHead(denied.status, { 'content-type': 'application/json; charset=utf-8' });
+    return res.end(JSON.stringify({ error: denied.message }));
+  }
 
   // API
   if (pathname.startsWith('/api/')) {
@@ -767,6 +836,21 @@ const server = http.createServer(async (req, res) => {
 });
 
 store.ensureDirs();
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n[HATA] ${PORT} portu dolu - panel muhtemelen zaten acik.`);
+    console.error(`        http://localhost:${PORT} adresini dene, ya da baska port kullan:`);
+    console.error('        PORT=4300 node server.js\n');
+    process.exit(1);
+  }
+  console.error('\n[HATA] Sunucu hatasi:', err.message, '\n');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('[uyari] Yakalanmamis hata:', err && err.message ? err.message : err);
+});
 
 server.listen(PORT, '127.0.0.1', () => {
   const character = store.getCharacter();

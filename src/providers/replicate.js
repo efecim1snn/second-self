@@ -36,7 +36,7 @@ module.exports = {
     },
   ],
 
-  async generate({ config, prompt, negative, seed, width, height, count = 1, referenceDataUri }) {
+  async generate({ config, prompt, negative, seed, width, height, count = 1, referenceDataUri, engine }) {
     if (!config.apiKey) throw new Error('Replicate API Token girilmemis.');
     const model = (config.model || 'black-forest-labs/flux-dev').trim();
     if (!/^[\w.-]+\/[\w.-]+$/.test(model)) {
@@ -50,6 +50,19 @@ module.exports = {
     };
     if (seed != null) input.seed = Number(seed);
     if (negative) input.negative_prompt = negative;
+
+    // Gercekcilik seviyesinin motor ayarlari. FLUX ailesi guidance,
+    // SDXL ailesi guidance_scale bekliyor - ikisini de gonderiyoruz,
+    // model tanimadigi alani yok sayar.
+    if (engine) {
+      if (engine.guidance != null) {
+        input.guidance = engine.guidance;
+        input.guidance_scale = engine.guidance;
+      }
+      if (engine.steps != null) {
+        input.num_inference_steps = engine.steps;
+      }
+    }
     if (width && height) {
       input.width = Number(width);
       input.height = Number(height);
