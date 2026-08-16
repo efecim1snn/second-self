@@ -128,7 +128,67 @@ function tabs() {
   });
 }
 
+/* ------------------------------------------------------------ karsilama */
+
+/**
+ * Ilk acilista bir kez gosterilir. Otomasyonu ENGELLEMEZ - "Simdilik gec"
+ * tek tikla gecer ve bir daha cikmaz. Affiliate oldugu acikca yazili.
+ */
+async function renderWelcome() {
+  const { welcome: w } = await api('/api/karsilama');
+  tabsEl.innerHTML = '';
+
+  view.innerHTML = `
+    <div class="card" style="max-width:760px;margin:0 auto">
+      <h1>${esc(w.title)}</h1>
+      ${w.body.map((p) => `<p class="lead">${esc(p)}</p>`).join('')}
+
+      <div class="field">
+        <label>Ne ise yariyor</label>
+        <ul class="help" style="margin:0;padding-left:18px;line-height:1.9">
+          ${w.usedFor.map((u) => `<li>${esc(u)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <hr class="sep">
+      <h2>${esc(w.question)}</h2>
+      <div class="row">
+        ${w.options.map((o) => `<button class="${o.key === 'gec' ? 'ghost' : 'btn'}" data-ans="${esc(o.key)}">${esc(o.label)}</button>`).join('')}
+      </div>
+
+      <div id="offer" hidden style="margin-top:18px">
+        <div class="notice info">
+          <p style="margin:0 0 10px">${esc(w.offer.text)}</p>
+          <p style="margin:0 0 12px">
+            <a href="${esc(w.offer.url)}" target="_blank" rel="noreferrer noopener"><b>${esc(w.offer.linkLabel)}</b></a>
+          </p>
+          <p class="help" style="margin:0">${esc(w.offer.disclosure)}</p>
+        </div>
+        <div class="row" style="margin-top:14px">
+          <button class="btn" data-ans="gec">Otomasyona gec</button>
+        </div>
+      </div>
+    </div>`;
+
+  view.querySelectorAll('[data-ans]').forEach((b) => {
+    b.onclick = async () => {
+      const answer = b.dataset.ans;
+      // "Hayir, bakayim" secilirse once teklifi goster, gecis butonuyla devam.
+      if (answer === 'yok' && document.getElementById('offer').hidden) {
+        document.getElementById('offer').hidden = false;
+        return;
+      }
+      await api('/api/karsilama', { answer });
+      await refresh();
+      S.tab = S.status.hasCharacter ? 'dosya' : 'kurulum';
+      render();
+    };
+  });
+}
+
 async function render() {
+  // Karsilama yalnizca bir kez, en basta.
+  if (S.status && S.status.app && !S.status.app.welcomeSeen) return renderWelcome();
   tabs();
   if (S.tab === 'kurulum') return renderWizard();
   if (S.tab === 'dosya') return renderDossier();

@@ -16,6 +16,7 @@ const TRASH_DIR = path.join(DATA_DIR, '_arsiv');
 const CHARACTER_FILE = path.join(DATA_DIR, 'character.json');
 const PROVIDERS_FILE = path.join(DATA_DIR, 'providers.json');
 const GALLERY_FILE = path.join(DATA_DIR, 'gallery.json');
+const APP_FILE = path.join(DATA_DIR, 'app.json');
 
 function ensureDirs() {
   for (const dir of [DATA_DIR, IMAGES_DIR]) {
@@ -55,6 +56,17 @@ function saveCharacter(character) {
 
 function hasCharacter() {
   return getCharacter() !== null;
+}
+
+/* ------------------------------------------------------- uygulama durumu */
+
+/** Karsilama ekrani gibi bir kez gosterilen seyler burada. */
+function getAppState() {
+  return readJson(APP_FILE, { welcomeSeen: false, welcomeAnswer: null });
+}
+
+function saveAppState(state) {
+  return writeJson(APP_FILE, { ...getAppState(), ...state });
 }
 
 /* --------------------------------------------------------------- saglayici */
@@ -166,6 +178,8 @@ module.exports = {
   getCharacter,
   saveCharacter,
   hasCharacter,
+  getAppState,
+  saveAppState,
   getProviderConfig,
   saveProviderConfig,
   getGallery,

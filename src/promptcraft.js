@@ -193,7 +193,9 @@ const NEGATIVE = [
  */
 const SKIN_REAL = 'natural skin texture with visible pores, fine vellus hair and subtle tonal unevenness, unmarked skin';
 
-const IMPERFECTION = 'slight natural facial asymmetry, a few loose flyaway hairs, no retouching';
+// Olumsuz ifade YOK - bkz. REALISM ustundeki not. "no retouching" yerine
+// ayni seyi olumlu soyleyen karsiligi kullaniliyor.
+const IMPERFECTION = 'slight natural facial asymmetry, a few loose flyaway hairs, skin left exactly as the sensor recorded it';
 
 /** Gercekcilik seviyeleri - kullanici Uretim ekranindan secer. */
 /**
@@ -204,6 +206,17 @@ const IMPERFECTION = 'slight natural facial asymmetry, a few loose flyaway hairs
  * geliyor. Bu degerler saglayiciya GERCEKTEN gonderilmeli - eskiden
  * hesaplanip yolda dusuruluyordu.
  */
+/**
+ * KRITIK: FLUX ve DALL-E'nin metin kodlayicisi OLUMSUZLAMAYI COZEMEZ.
+ * "no beauty filter, no retouching" yazdiginda modele giren sey pratikte
+ * "beauty filter, retouching" oluyor - yani kendi ayagimiza sikiyoruz.
+ * Bu yuzden dogal dil cumlelerinde olumsuz ifade YASAK; her sey olumlu
+ * karsiligiyla yaziliyor ("unretouched frame straight out of the camera").
+ *
+ * Agirlik sozdizimi (parantez:1.3) yalnizca SDXL tabanli araclarda anlamli;
+ * Midjourney ve bulut API'lerinde cop token olarak giriyor. O yuzden uc ayri
+ * bicim var: sentences (dogal dil), tags (SDXL, agirlikli), plain (duz etiket).
+ */
 const REALISM = {
   // Varsayilan. En cok "gercek insan" hissi veren yol: profesyonel cekim
   // gibi degil, birinin telefonuyla cektigi an gibi gorunmek.
@@ -211,17 +224,21 @@ const REALISM = {
     label: 'Ultra gercekci (telefonla cekilmis gibi)',
     engine: { guidance: 2.4, steps: 32, cfg: 4.5 },
     sentences: [
-      'This is a candid, unposed amateur snapshot taken on a modern smartphone camera, not a professional photoshoot.',
+      'A candid, unposed amateur snapshot taken on a modern smartphone camera.',
       `${SKIN_REAL}. ${IMPERFECTION}.`,
-      'Imperfect available light, slightly imperfect framing, very subtle motion blur, natural muted colours, no HDR, no beauty filter, no retouching.',
+      'An unretouched frame straight out of the camera: available light with uneven shadows, slightly off-centre framing, a trace of motion blur, muted everyday colours and fine sensor grain.',
     ],
     tags: [
       '(RAW candid photo:1.3)', '(photorealistic:1.3)', 'amateur smartphone snapshot',
-      'skin texture', 'skin pores', 'subsurface scattering', 'imperfect skin',
+      '(skin texture:1.2)', '(skin pores:1.1)', 'subsurface scattering', 'imperfect skin',
       'natural available light', 'slight motion blur', 'muted natural colours',
-      'no retouching', 'film grain',
+      'unretouched', 'film grain',
     ],
-    mj: ['candid amateur phone photo', 'natural skin texture', 'unretouched', 'imperfect lighting'],
+    plain: [
+      'candid amateur phone photo', 'unretouched straight out of camera',
+      'natural skin texture with visible pores', 'available light with uneven shadows',
+      'muted everyday colours', 'fine sensor grain',
+    ],
   },
   pro: {
     label: 'Gercekci profesyonel (fotografci cekimi)',
@@ -229,14 +246,18 @@ const REALISM = {
     sentences: [
       'Photographed by a professional on a Canon EOS R5 with an 85mm f/1.4 lens.',
       `${SKIN_REAL}. ${IMPERFECTION}.`,
-      'Realistic colour grading, shallow depth of field, sharp focus on the eyes, subtle film grain, no beauty filter, no over-sharpening.',
+      'An unretouched frame with realistic colour grading, shallow depth of field, sharp focus on the eyes and subtle film grain.',
     ],
     tags: [
       '(RAW photo:1.3)', '(photorealistic:1.3)', 'Canon EOS R5', '85mm f/1.4',
-      'skin texture', 'skin pores', 'subsurface scattering',
-      'shallow depth of field', 'sharp focus on eyes', 'film grain', 'no retouching',
+      '(skin texture:1.2)', '(skin pores:1.1)', 'subsurface scattering',
+      'shallow depth of field', 'sharp focus on eyes', 'film grain', 'unretouched',
     ],
-    mj: ['photorealistic', 'shot on Canon EOS R5 85mm', 'natural skin texture', 'unretouched'],
+    plain: [
+      'photorealistic', 'shot on Canon EOS R5 with 85mm f/1.4',
+      'natural skin texture with visible pores', 'unretouched', 'shallow depth of field',
+      'sharp focus on the eyes', 'film grain',
+    ],
   },
   editorial: {
     label: 'Editoryal / moda',
@@ -244,15 +265,24 @@ const REALISM = {
     sentences: [
       'An editorial fashion photograph shot on a medium format camera.',
       `${SKIN_REAL}.`,
-      'Controlled studio lighting, realistic colour, sharp focus, high detail, minimal retouching.',
+      'Controlled studio lighting, realistic colour, sharp focus, high detail, skin left largely untouched.',
     ],
     tags: [
       '(editorial fashion photo:1.2)', '(photorealistic:1.2)', 'medium format',
-      'skin texture', 'skin pores', 'studio lighting', 'high detail', 'minimal retouching',
+      '(skin texture:1.2)', 'skin pores', 'studio lighting', 'high detail', 'minimal retouching',
     ],
-    mj: ['editorial fashion photograph', 'medium format', 'natural skin texture'],
+    plain: [
+      'editorial fashion photograph', 'medium format camera',
+      'natural skin texture', 'controlled studio lighting', 'high detail',
+    ],
   },
 };
+
+/** Lehceye gore dogru gercekcilik bicimi. */
+function realismTags(real, dialect) {
+  const weighted = dialect === 'sdxl';
+  return weighted ? real.tags : real.plain;
+}
 
 function realismOf(scene) {
   return REALISM[scene.realism] || REALISM.ultra;
@@ -273,11 +303,25 @@ const QUALITY = {
 // kat kucultuyor, bolunmeyen olcude kenar bozulmasi ve detay kaybi oluyor.
 // Eski deger 864x1080 idi; 1080 sayisi 16'ya bolunmuyor.
 const ASPECT = {
-  'post': { label: 'Instagram post (4:5)', mj: '4:5', wh: [896, 1120] },
-  'story': { label: 'Story / Reel (9:16)', mj: '9:16', wh: [768, 1344] },
-  'square': { label: 'Kare (1:1)', mj: '1:1', wh: [1024, 1024] },
-  'wide': { label: 'Yatay (16:9)', mj: '16:9', wh: [1344, 768] },
+  'post': { label: 'Instagram post (4:5)', mj: '4:5', wh: [896, 1120], wideWh: [1024, 1280] },
+  'story': { label: 'Story / Reel (9:16)', mj: '9:16', wh: [768, 1344], wideWh: [896, 1568] },
+  'square': { label: 'Kare (1:1)', mj: '1:1', wh: [1024, 1024], wideWh: [1152, 1152] },
+  'wide': { label: 'Yatay (16:9)', mj: '16:9', wh: [1344, 768], wideWh: [1536, 896] },
 };
+
+/**
+ * GENIS KADRAJDA YUZ ERIMESI
+ *
+ * Tam boy bir figurde yuz karenin ~%8'ini kaplar. 896x1120'de bu ~90 piksel;
+ * VAE 8 kat kucultunce latent uzayda ~11 piksel kaliyor ve model orada goz,
+ * burun, agiz uretemiyor - yuz eriyor. Cozum prompt degil, cozunurluk.
+ * Genis kadrajda olcuyu buyutuyoruz.
+ */
+const WIDE_SHOT = /full body|wide|head to toe|knees up|three-quarter body|environmental/i;
+
+function isWideShot(scene) {
+  return WIDE_SHOT.test(`${scene.shot || ''} ${scene.pose || ''}`);
+}
 
 /* ---------------------------------------------------- fiziksel cekirdek */
 
@@ -390,10 +434,11 @@ function buildReferencePrompt(identity, scene, dialect) {
       `${capitalise(scene.shot)}.`,
       `${capitalise(scene.pose)}.`,
       'They are wearing a plain white crew-neck t-shirt.',
-      'Flat, even studio lighting with no harsh shadows and no coloured light.',
+      'Flat, even studio lighting, soft and shadowless, neutral white.',
       `Photorealistic and unretouched: ${SKIN_REAL}. ${IMPERFECTION}. Sharp focus across the whole face, high detail.`,
-      'It must look like a real photograph of a real person, not a digital rendering.',
-      'The background is completely empty - no scenery, no furniture, no props, no jewellery.',
+      'It looks like a real photograph of a real person, captured on a real camera.',
+      'The background is a completely empty flat grey wall, bare and uninterrupted.',
+      `Again: ${capitalise(scene.pose)}.`,
     ].join(' ');
   }
 
@@ -536,7 +581,10 @@ function build(character, scene = {}, dialect = 'generic') {
   const identity = character.identity;
   const core = physicalCore(identity);
   const aspectKey = ASPECT[scene.aspect] ? scene.aspect : 'post';
-  const aspect = ASPECT[aspectKey];
+  const aspectBase = ASPECT[aspectKey];
+  // Genis kadrajda yuze daha cok piksel dusmesi icin cozunurluk buyutulur.
+  const wide = isWideShot(scene) && scene.style !== 'reference';
+  const aspect = { ...aspectBase, wh: wide ? aspectBase.wideWh : aspectBase.wh };
   // Vesikalik acilarinda seed kaydirilir (bkz. reference.sceneFor): ayni seed
   // ile model aci talimatini yok sayip ayni kareyi tekrar uretiyor.
   const seed = scene.seedOffset
@@ -544,7 +592,7 @@ function build(character, scene = {}, dialect = 'generic') {
     : character.seed;
   const words = sceneWords(scene);
   const real = realismOf(scene);
-  const quality = QUALITY[scene.style] || real.tags;
+  const quality = QUALITY[scene.style] || realismTags(real, dialect);
   const extra = scene.extra ? String(scene.extra).trim() : '';
   const spec = DIALECTS[dialect] || DIALECTS.generic;
 
@@ -587,7 +635,7 @@ function build(character, scene = {}, dialect = 'generic') {
 
   switch (dialect) {
     case 'midjourney': {
-      prompt = [core, ...words, ...real.mj, ...quality, extra].filter(Boolean).join(', ');
+      prompt = [core, ...words, ...quality, extra].filter(Boolean).join(', ');
       const flags = [`--ar ${aspect.mj}`, '--style raw', '--v 7', `--seed ${seed}`];
       if (character.reference && character.reference.publicUrl) {
         flags.push(`--cref ${character.reference.publicUrl}`, '--cw 100');
@@ -664,7 +712,7 @@ function build(character, scene = {}, dialect = 'generic') {
         `A photograph of a ${core}.`,
         sentences,
         real.sentences.join(' '),
-        'It must look like a real photograph of a real person, not a digital rendering. Do not add any text or watermark.',
+        'It looks like a real photograph of a real person, captured on a real camera. The frame contains only the photograph itself.',
         extra,
       ].filter(Boolean).join(' ');
       params.size = aspectKey === 'square' ? '1024x1024' : (aspectKey === 'wide' ? '1792x1024' : '1024x1792');
@@ -687,7 +735,7 @@ function build(character, scene = {}, dialect = 'generic') {
     }
 
     default: {
-      prompt = [core, ...words, ...real.mj, ...quality, extra].filter(Boolean).join(', ');
+      prompt = [core, ...words, ...quality, extra].filter(Boolean).join(', ');
       params.negative_prompt = negative;
       params.seed = seed;
       params.width = aspect.wh[0];
@@ -705,6 +753,7 @@ function build(character, scene = {}, dialect = 'generic') {
     aspectLabel: aspect.label,
     width: aspect.wh[0],
     height: aspect.wh[1],
+    wideShot: wide,
     params,
     // Motor ayarlari: saglayiciya AYRICA gonderilir. Eskiden params icinde
     // hesaplanip yolda dusuruluyordu, model varsayilanlariyla calisiyordu.

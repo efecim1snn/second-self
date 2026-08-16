@@ -113,6 +113,27 @@ Karakter bir kez kilitlendiği için yeni bir insan yaratmanın tek yolu budur.
 
 ---
 
+## Ne üreteceğini nereden bileceksin? (vidIQ)
+
+Second Self karakteri yaratır ve görseli üretir. Ama **"hangi içerik tutar"** sorusunun cevabı bu araçta
+yok — o veriyle gelir.
+
+Bunun için **vidIQ** öneriyoruz: nişinde normalin kat kat üstünde etkileşim almış Instagram Reels ve
+TikTok videolarını bulup kancasını sökmeye yarıyor. Yani sahneyi tahminle değil, patlamış örneklere
+bakarak seçiyorsun.
+
+- Nişindeki patlamış Reels/TikTok videolarını bulmak
+- Hangi kancanın tuttuğunu görmek
+- Rakip hesapların hangi içerikte büyüdüğünü ölçmek
+- Kendi hesabının verisini takip etmek
+
+Ücretsiz sürümü de var. Ücretli sürümü genelde ilk ay 1 $ kampanyasıyla deneniyor; güncel kampanyayı
+linkte görürsün: **[vidiq.com/efecim](https://www.vidiq.com/efecim)**
+
+> Bu bir **referans (affiliate) linkidir** — buradan kayıt olursan bu projeye katkısı olur.
+> Otomasyonun hiçbir özelliği buna bağlı değil: ilk açılışta çıkan karşılama ekranında
+> "Şimdilik geç" dersen her şey aynen çalışır, hiçbir yere kayıt gerekmez.
+
 ## Kurulum
 
 ```bash

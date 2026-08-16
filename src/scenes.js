@@ -11,7 +11,9 @@ const SHOTS = {
   bust: 'upper body shot, waist up',
   half: 'half body shot',
   full: 'full body shot',
-  wide: 'wide environmental shot, subject small in frame',
+  // "subject small in frame" bilerek kaldirildi: modele yuzu kucult demek
+  // oluyordu ve tam boy karelerde yuz eriyordu.
+  wide: 'wide environmental shot, the subject clearly readable in the frame',
 };
 
 const LIGHTING = [

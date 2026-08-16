@@ -57,7 +57,7 @@ const TASKS = [
     label: 'Spor / antrenman',
     words: ['spor', 'antrenman', 'gym', 'fitness', 'kosu', 'workout', 'egzersiz', 'yoga', 'pilates'],
     scene: {
-      shot: 'full body shot',
+      shot: 'three-quarter body shot, cropped at mid-thigh',
       pose: 'mid-exercise, focused expression, slight sweat on the skin',
       outfit: 'a fitted sportswear set',
       setting: 'a modern gym with large windows in {city}',
@@ -95,7 +95,7 @@ const TASKS = [
     label: 'Plaj / deniz',
     words: ['plaj', 'deniz', 'beach', 'sahil', 'kumsal', 'yuzme', 'tatil', 'havuz'],
     scene: {
-      shot: 'full body shot',
+      shot: 'three-quarter body shot, cropped at mid-thigh',
       pose: 'walking along the waterline, hair moving in the wind, looking towards the sea',
       outfit: 'light summer clothes',
       setting: 'a quiet beach near {city} at golden hour',
@@ -109,7 +109,7 @@ const TASKS = [
     label: 'Sokak / sehir',
     words: ['sokak', 'street', 'sehir', 'city', 'gezi', 'yuruyus', 'mekan', 'dis cekim'],
     scene: {
-      shot: 'full body shot',
+      shot: 'three-quarter body shot, cropped at mid-thigh',
       pose: 'walking mid-stride, looking over the shoulder towards the camera',
       outfit: 'persona',
       setting: 'a characterful old street in {city} with textured walls',
@@ -151,7 +151,7 @@ const TASKS = [
     label: 'Moda / kombin',
     words: ['moda', 'kombin', 'kiyafet', 'outfit', 'fashion', 'stil', 'giyim', 'alisveris'],
     scene: {
-      shot: 'full body shot',
+      shot: 'three-quarter body shot, cropped at mid-thigh',
       pose: 'standing confidently against a plain wall, one hand adjusting the jacket',
       outfit: 'persona',
       setting: 'a clean concrete wall in {city}',
@@ -196,7 +196,7 @@ const TASKS = [
     label: 'Seyahat',
     words: ['seyahat', 'travel', 'ucak', 'havaalani', 'otel', 'valiz', 'gezmek'],
     scene: {
-      shot: 'full body shot',
+      shot: 'three-quarter body shot, cropped at mid-thigh',
       pose: 'pulling a small suitcase, looking back over the shoulder',
       outfit: 'comfortable travel clothes',
       setting: 'an airport terminal with tall windows and morning light',

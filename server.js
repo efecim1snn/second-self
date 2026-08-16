@@ -24,6 +24,7 @@ const promptcraft = require('./src/promptcraft');
 const scenes = require('./src/scenes');
 const reference = require('./src/reference');
 const brief = require('./src/brief');
+const welcome = require('./src/welcome');
 const providers = require('./src/providers');
 
 const PORT = Number(process.env.PORT || 4200);
@@ -264,7 +265,22 @@ const routes = {
       identityLine: character ? promptcraft.identityLine(character.identity) : null,
       reference: character ? reference.status(character) : null,
       risks: character ? traits.risks(character.identity.distinctive) : [],
+      app: store.getAppState(),
     };
+  },
+
+  /* --------------------------------------------------- karsilama (bir kez) */
+
+  'GET /api/karsilama': async () => ({
+    welcome: welcome.WELCOME,
+    state: store.getAppState(),
+  }),
+
+  'POST /api/karsilama': async (body) => {
+    // Hangi cevabi verirse versin ekran bir daha cikmaz - otomasyonu
+    // engellemez, kilitlemez.
+    const answer = ['var', 'yok', 'gec'].includes(body.answer) ? body.answer : 'gec';
+    return { state: store.saveAppState({ welcomeSeen: true, welcomeAnswer: answer }) };
   },
 
   'POST /api/sorular': async (body) => {
@@ -864,6 +880,13 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`   Karakter   : ${character ? `${character.identity.name} (@${character.identity.handle}) - KILITLI` : 'yok - sihirbaz acilacak'}`);
   if (refStatus) console.log(`   Vesikalik  : ${refStatus.done}/${refStatus.total} aci`);
   console.log(`   Uretici    : ${spec.label}`);
+  if (!store.getAppState().welcomeSeen) {
+    console.log('');
+    console.log('   Ilk calistirma: panelde kisa bir karsilama ekrani cikacak.');
+    console.log('   Ne uretecegini bulmak icin vidIQ oneriliyor (nisindeki patlamis');
+    console.log(`   Reels/TikTok videolarini bulur): ${welcome.VIDIQ_URL}`);
+    console.log('   Referans linkidir, zorunlu degildir, "Simdilik gec" ile atlanir.');
+  }
   if (spec.id === 'manual') {
     console.log('');
     console.log('   ! Bagli gorsel uretim API\'si yok.');
