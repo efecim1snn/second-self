@@ -512,14 +512,6 @@ async function renderDossier() {
         </div>`).join('')}
     </form>
 
-    <div class="card savebar">
-      <div class="row">
-        <button class="btn" id="savechar">Kaydet</button>
-        <button class="ghost" id="revert">Degisiklikleri geri al</button>
-        <span class="dim" id="savehint">Kimlik degisirse seed yeniden hesaplanir.</span>
-      </div>
-    </div>
-
     <div class="card">
       <h2>Fiziksel cekirdek</h2>
       <p class="help">Her prompt'a AYNEN bu satir girer. Tutarliligin %70'i budur.</p>
@@ -551,6 +543,14 @@ async function renderDossier() {
     <div class="card">
       <h3>Icerik sutunlari</h3>
       <div>${p.contentPillars.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>
+    </div>
+
+    <div class="card savebar">
+      <div class="row">
+        <button class="btn" id="savechar">Kaydet</button>
+        <button class="ghost" id="revert">Degisiklikleri geri al</button>
+        <span class="dim">Kimlik degisirse seed yeniden hesaplanir.</span>
+      </div>
     </div>`;
 
   const form = document.getElementById('charform');
