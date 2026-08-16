@@ -252,10 +252,18 @@ const routes = {
     };
   },
 
-  'POST /api/sorular': async (body) => ({
-    questions: wizard.questionsFor(body.answers || {}),
-    sections: wizard.sections(),
-  }),
+  'POST /api/sorular': async (body) => {
+    // Duzenleme formu icin: kayitli karakterin cevaplarini da hesaba kat,
+    // boylece kita->ulke->sehir zinciri mevcut secime gore cozulur.
+    const character = store.getCharacter();
+    const base = character ? (character.answers || answersFromCharacter(character)) : {};
+    const answers = body.useSaved ? { ...base, ...(body.answers || {}) } : (body.answers || {});
+    return {
+      questions: wizard.questionsFor(answers),
+      sections: wizard.sections(),
+      answers: body.useSaved ? answers : undefined,
+    };
+  },
 
   'GET /api/sorular': async () => ({
     questions: wizard.questionsFor({}),
@@ -306,11 +314,14 @@ const routes = {
     const personaBlock = life.enrich(persona.build(clean, name), lifeBlock);
 
     const character = {
-      version: 2,
+      version: 3,
       characterId: `chr_${crypto.randomBytes(4).toString('hex')}`,
       createdAt: new Date().toISOString(),
       locked: true,
       seed: wizard.deriveSeed(identity),
+      // Ham cevaplar saklanir: karakter dosyasi sayfasinda her alan tek tek
+      // duzenlenebilsin diye formu bunlarla dolduruyoruz.
+      answers: clean,
       identity,
       life: lifeBlock,
       persona: personaBlock,
@@ -323,6 +334,83 @@ const routes = {
     return {
       character,
       identityLine: promptcraft.identityLine(identity),
+      risks: traits.risks(identity.distinctive),
+    };
+  },
+
+  /**
+   * KARAKTERI DUZENLE
+   * Karakter dosyasi sayfasindaki formdan gelir; her alan tek tek degistirilebilir.
+   * Kimlik degisirse seed yeniden turetilir - o yuzden mevcut vesikalik ve
+   * gorseller artik ayni kisiyi gostermeyebilir; bunu cagirana bildiriyoruz.
+   */
+  'POST /api/karakter/duzenle': async (body) => {
+    const existing = store.getCharacter();
+    if (!existing) throw notFound('Once karakter yarat.');
+
+    const base = existing.answers || answersFromCharacter(existing);
+    const merged = life.autoFill({ ...base, ...(body.answers || {}) });
+
+    const { ok, errors, clean } = wizard.validate(merged);
+    if (!ok) {
+      const err = new Error(errors.join(' '));
+      err.status = 400;
+      err.errors = errors;
+      throw err;
+    }
+
+    const name = clean.name || existing.identity.name;
+    const handle = (clean.handle || existing.identity.handle).replace(/^@/, '');
+
+    const identity = {
+      name,
+      handle,
+      gender: clean.gender,
+      region: clean.region,
+      ethnicity: clean.ethnicity,
+      skinTone: clean.skinTone,
+      eyeColor: clean.eyeColor,
+      hairColor: clean.hairColor,
+      hairStyle: clean.hairStyle,
+      age: clean.age,
+      bodyType: clean.bodyType,
+      measurements: clean.measurements,
+      distinctive: clean.distinctive || [],
+      appearanceNote: clean.appearanceNote || '',
+    };
+
+    const identityChanged = JSON.stringify(identity) !== JSON.stringify(existing.identity);
+    const lifeBlock = wizard.extractLife({ ...clean, name });
+    const personaBlock = life.enrich(persona.build(clean, name), lifeBlock);
+
+    const updated = {
+      ...existing,
+      version: 3,
+      answers: clean,
+      identity,
+      seed: wizard.deriveSeed(identity),
+      life: lifeBlock,
+      persona: personaBlock,
+      dossier: life.dossier(identity, lifeBlock, personaBlock),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Kimlik degistiyse eski referans kareler baska bir kisiye ait olur.
+    let referenceCleared = false;
+    const hasReference = Object.keys(existing.referenceSet || {}).length > 0;
+    if (identityChanged && hasReference && body.clearReference) {
+      updated.referenceSet = {};
+      updated.reference = { filename: null, publicUrl: '', setAt: null };
+      referenceCleared = true;
+    }
+
+    store.saveCharacter(updated);
+    return {
+      character: updated,
+      identityLine: promptcraft.identityLine(identity),
+      identityChanged,
+      referenceStale: identityChanged && hasReference && !referenceCleared,
+      referenceCleared,
       risks: traits.risks(identity.distinctive),
     };
   },
@@ -585,6 +673,35 @@ const routes = {
     };
   },
 };
+
+/**
+ * Eski surumde yaratilmis (answers alani olmayan) karakterler icin
+ * cevaplari kimlik + hayat bloklarindan geri kurar. Boylece duzenleme
+ * formu onlarda da dolu acilir.
+ */
+function answersFromCharacter(character) {
+  const id = character.identity || {};
+  const lf = character.life || {};
+  const pr = character.persona || {};
+  const [cityName, country] = String(lf.city || '').split(',').map((s) => s.trim());
+  const [hometownCity, hometownCountry] = String(lf.hometown || '').split(',').map((s) => s.trim());
+  const sameHometown = (lf.hometown || '') === (lf.city || '');
+
+  return {
+    ...id,
+    ...lf,
+    zodiac: pr.zodiac,
+    education: pr.education,
+    interests: pr.interests || [],
+    continent: lf.continent || life.continentOf(country) || 'Avrupa',
+    country: country || lf.country || '',
+    cityName: cityName || '',
+    hometownMode: sameHometown ? life.SAME_AS_CITY : 'Farkli bir yer sececegim',
+    hometownContinent: lf.hometownContinent || life.continentOf(hometownCountry) || 'Avrupa',
+    hometownCountry: hometownCountry || '',
+    hometownCity: hometownCity || '',
+  };
+}
 
 function isConfigured(spec, config) {
   if (spec.id === 'manual') return true;

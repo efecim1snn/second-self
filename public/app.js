@@ -12,6 +12,7 @@ const S = {
   scenes: [],
   scene: null,
   plan: null,
+  edit: null,      // karakter dosyasi formundaki bekleyen degisiklikler
   busy: false,
 };
 
@@ -336,24 +337,155 @@ function renderWizardSummary() {
   };
 }
 
+/* ------------------------------------------------- soru -> form alani */
+
+/**
+ * Bir soruyu form alanina cevirir. Hem tek sayfalik sihirbaz hem karakter
+ * dosyasi duzenleme formu bunu kullanir - boylece iki yerde ayni secenekler.
+ */
+function fieldHtml(q, value) {
+  const id = `fld_${q.key}`;
+  const meta = (opt) => (q.meta || []).find((m) => m.value === opt);
+
+  if (q.type === 'select' || q.type === 'select-or-text') {
+    const known = (q.options || []).includes(value);
+    return `
+      <div class="field">
+        <label>${esc(q.label)}${q.required ? ' *' : ''}</label>
+        <select id="${id}" data-key="${esc(q.key)}" data-type="${q.type}">
+          ${(q.options || []).map((o) => `<option ${o === value ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+          ${q.type === 'select-or-text' ? `<option value="__custom__" ${value && !known ? 'selected' : ''}>— kendim yazacagim —</option>` : ''}
+        </select>
+        ${q.type === 'select-or-text'
+          ? `<input id="${id}_txt" data-custom="${esc(q.key)}" style="margin-top:8px;${value && !known ? '' : 'display:none'}"
+                    value="${esc(value && !known ? value : '')}" placeholder="listede yoksa buraya yaz">`
+          : ''}
+        ${q.hint ? `<p class="help">${esc(q.hint)}</p>` : ''}
+      </div>`;
+  }
+
+  if (q.type === 'multiselect') {
+    const sel = Array.isArray(value) ? value : [];
+    return `
+      <div class="field">
+        <label>${esc(q.label)} <span class="dim">(en fazla ${q.max})</span></label>
+        <div class="choices" data-multikey="${esc(q.key)}">
+          ${(q.options || []).map((o) => {
+            const m = meta(o);
+            return `<button type="button" class="choice ${sel.includes(o) ? 'on' : ''} ${m && m.risk === 'yuksek' ? 'risky' : ''}" data-opt="${esc(o)}">
+              ${esc(o)} ${m ? riskBadge(m.risk) : ''}</button>`;
+          }).join('')}
+        </div>
+        ${q.hint ? `<p class="help">${esc(q.hint)}</p>` : ''}
+      </div>`;
+  }
+
+  if (q.type === 'number') {
+    return `<div class="field">
+      <label>${esc(q.label)} <span class="dim">(${q.min}-${q.max})</span></label>
+      <input type="number" id="${id}" data-key="${esc(q.key)}" data-type="number"
+             min="${q.min}" max="${q.max}" value="${value != null ? value : q.default}">
+      ${q.hint ? `<p class="help">${esc(q.hint)}</p>` : ''}
+    </div>`;
+  }
+
+  if (q.type === 'measurements') {
+    const m = value || {};
+    return `<div class="field">
+      <label>${esc(q.label)}</label>
+      ${q.hint ? `<p class="help">${esc(q.hint)}</p>` : ''}
+      <div class="grid3" data-meas="${esc(q.key)}">
+        ${q.fields.map((f) => `
+          <div class="field" style="margin-bottom:0">
+            <label>${esc(f.label)}${f.required ? ' *' : ''} <span class="dim">(${f.min}-${f.max})</span></label>
+            <input type="number" data-m="${f.key}" min="${f.min}" max="${f.max}"
+                   value="${m[f.key] != null ? m[f.key] : (f.default != null ? f.default : '')}"
+                   placeholder="${f.required ? 'zorunlu' : 'opsiyonel'}">
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  return `<div class="field">
+    <label>${esc(q.label)}${q.required ? ' *' : ''}</label>
+    <input type="text" id="${id}" data-key="${esc(q.key)}" data-type="text"
+           maxlength="${q.maxLength || 80}" value="${esc(value || '')}" placeholder="opsiyonel">
+    ${q.hint ? `<p class="help">${esc(q.hint)}</p>` : ''}
+  </div>`;
+}
+
+/** Formdaki tum alanlari toplayip cevap nesnesi kurar. */
+function collectForm(root) {
+  const out = {};
+  root.querySelectorAll('[data-key]').forEach((el) => {
+    const key = el.dataset.key;
+    if (el.dataset.type === 'number') out[key] = Number(el.value);
+    else if (el.dataset.type === 'select-or-text' && el.value === '__custom__') {
+      const txt = root.querySelector(`[data-custom="${key}"]`);
+      out[key] = txt ? txt.value.trim() : '';
+    } else out[key] = el.value;
+  });
+  root.querySelectorAll('[data-multikey]').forEach((box) => {
+    out[box.dataset.multikey] = Array.from(box.querySelectorAll('.choice.on')).map((b) => b.dataset.opt);
+  });
+  root.querySelectorAll('[data-meas]').forEach((box) => {
+    const m = {};
+    box.querySelectorAll('[data-m]').forEach((el) => { if (el.value !== '') m[el.dataset.m] = Number(el.value); });
+    out[box.dataset.meas] = m;
+  });
+  return out;
+}
+
+/** Form etkilesimleri: cok secim, "kendim yazacagim", zincirli yeniden yukleme. */
+function wireForm(root, onChainChange) {
+  root.querySelectorAll('[data-multikey]').forEach((box) => {
+    const max = Number(box.dataset.max || 2);
+    box.querySelectorAll('.choice').forEach((b) => {
+      b.onclick = () => {
+        if (b.dataset.opt === 'Yok') {
+          box.querySelectorAll('.choice').forEach((x) => x.classList.remove('on'));
+          return;
+        }
+        const on = box.querySelectorAll('.choice.on').length;
+        if (!b.classList.contains('on') && on >= max) return toast(`En fazla ${max} secebilirsin.`, 'bad');
+        b.classList.toggle('on');
+      };
+    });
+  });
+  root.querySelectorAll('select[data-type="select-or-text"]').forEach((sel) => {
+    const txt = root.querySelector(`[data-custom="${sel.dataset.key}"]`);
+    sel.addEventListener('change', () => {
+      if (txt) txt.style.display = sel.value === '__custom__' ? '' : 'none';
+    });
+  });
+  // Kita/ulke degisince alt listeler yenilenmeli
+  ['continent', 'country', 'hometownMode', 'hometownContinent', 'hometownCountry'].forEach((key) => {
+    const el = root.querySelector(`[data-key="${key}"]`);
+    if (el) el.addEventListener('change', onChainChange);
+  });
+}
+
 /* -------------------------------------------------------------- dossier */
 
-function renderDossier() {
+async function renderDossier() {
   const c = S.status.character;
-  const id = c.identity;
   const p = c.persona;
   const l = c.life || {};
-  const m = id.measurements || {};
   const risks = S.status.risks || [];
   const ref = S.status.reference;
 
-  const cell = (label, value) => `<div class="idcell"><span>${esc(label)}</span><b>${esc(value || '—')}</b></div>`;
+  const data = await api('/api/sorular', { useSaved: true, answers: S.edit || {} });
+  const questions = data.questions;
+  const answers = data.answers || {};
+  const bySection = {};
+  for (const q of questions) (bySection[q.section] = bySection[q.section] || []).push(q);
 
   view.innerHTML = `
-    <h1>${esc(id.name)} <span class="dim">@${esc(id.handle)}</span></h1>
+    <h1>${esc(c.identity.name)} <span class="dim">@${esc(c.identity.handle)}</span></h1>
     <p class="lead">
-      <span class="locked">🔒 Kimlik kilitli</span> · seed <span class="mono">${c.seed}</span> ·
-      ${esc(l.city || '')} · olusturuldu ${new Date(c.createdAt).toLocaleString('tr-TR')}
+      seed <span class="mono">${c.seed}</span> · ${esc(l.city || '')} ·
+      olusturuldu ${new Date(c.createdAt).toLocaleString('tr-TR')}
+      ${c.updatedAt ? ` · guncellendi ${new Date(c.updatedAt).toLocaleString('tr-TR')}` : ''}
     </p>
 
     ${risks.length ? risks.map((r) => `<div class="notice ${r.risk === 'yuksek' ? 'bad' : 'warn'}">
@@ -361,56 +493,30 @@ function renderDossier() {
     </div>`).join('') : ''}
 
     ${ref && !ref.complete ? `<div class="notice warn">
-      <b>Vesikalik seti eksik (${ref.done}/${ref.total}).</b> Icerik uretmeden once 8 acilik vesikaligi
-      tamamla - yuz tutarliligini en cok yukselten adim budur.
+      <b>Vesikalik seti eksik (${ref.done}/${ref.total}).</b> Icerik uretmeden once tamamla -
+      yuz tutarliligini en cok yukselten adim budur.
     </div>` : ''}
 
-    <div class="card">
-      <h2>Kilitli kimlik</h2>
-      <div class="identity">
-        ${cell('Cinsiyet', id.gender)}
-        ${cell('Bolge', id.region)}
-        ${cell('Etnik koken', id.ethnicity)}
-        ${cell('Ten rengi', id.skinTone)}
-        ${cell('Goz rengi', id.eyeColor)}
-        ${cell('Sac', `${id.hairStyle} · ${id.hairColor}`)}
-        ${cell('Yas', id.age)}
-        ${cell('Vucut tipi', id.bodyType)}
-        ${cell('Boy / kilo', `${m.height_cm || '—'} cm · ${m.weight_kg || '—'} kg`)}
-        ${cell('Olculer', m.bust_cm ? `${m.bust_cm}-${m.waist_cm || '?'}-${m.hips_cm || '?'}` : '—')}
-        ${cell('Ayirt edici', (id.distinctive || []).join(', ') || 'Yok')}
-      </div>
+    <div class="notice info">
+      <b>Her sey buradan tek tek secilir.</b> Bir alani degistirip <b>Kaydet</b> dedigin an
+      karakter dosyasi, ses rehberi ve prompt'lar yeniden uretilir.
+      Gorunusu degistirirsen seed de degisir - daha once uretilmis vesikalik ve gorseller
+      artik ayni kisiyi gostermeyebilir; kaydederken bunu sana soracagim.
     </div>
 
-    <div class="card">
-      <h2>Karakter dosyasi</h2>
-      <p class="help">Caption yazarken, marka isbirligi degerlendirirken ve icerik planlarken tek referans nokta.</p>
-      <div class="dossier">${esc(c.dossier || '').split('\n\n').map((par) => `<p>${esc(par)}</p>`).join('')}</div>
-    </div>
+    <form id="charform">
+      ${Object.entries(bySection).map(([section, qs]) => `
+        <div class="card">
+          <h2>${esc(section)}</h2>
+          ${qs.map((q) => fieldHtml(q, answers[q.key])).join('')}
+        </div>`).join('')}
+    </form>
 
-    <div class="card">
-      <h2>Hayat</h2>
-      <div class="identity">
-        ${cell('Yasadigi sehir', l.city)}
-        ${cell('Memleket', l.hometown)}
-        ${cell('Sosyoekonomik koken', l.socioeconomic)}
-        ${cell('Baba', l.fatherJob)}
-        ${cell('Anne', l.motherJob)}
-        ${cell('Kardes', l.siblings)}
-        ${cell('Iliski', l.maritalStatus)}
-        ${cell('Cocuk', l.children)}
-        ${cell('Meslek', l.occupation)}
-        ${cell('Gelir', l.income)}
-        ${cell('Ev', l.home)}
-        ${cell('Evcil hayvan', l.pet)}
-        ${cell('Ulasim', l.transport)}
-        ${cell('Diller', (l.languages || []).join(', '))}
-        ${cell('Gunluk ritim', l.routine)}
-        ${cell('Donum noktasi', l.definingEvent)}
-        ${cell('Korkusu', l.fear)}
-        ${cell('Hayali', l.dream)}
-        ${cell('Degeri', l.values)}
-        ${cell('Muzik', l.musicTaste)}
+    <div class="card savebar">
+      <div class="row">
+        <button class="btn" id="savechar">Kaydet</button>
+        <button class="ghost" id="revert">Degisiklikleri geri al</button>
+        <span class="dim" id="savehint">Kimlik degisirse seed yeniden hesaplanir.</span>
       </div>
     </div>
 
@@ -421,10 +527,15 @@ function renderDossier() {
       <div class="row" style="margin-top:12px"><button class="ghost" id="copycore">Kopyala</button></div>
     </div>
 
+    <div class="card">
+      <h2>Karakter hikayesi</h2>
+      <p class="help">Cevaplarindan uretildi. Caption yazarken ve marka isbirligi degerlendirirken tek referans nokta.</p>
+      <div class="dossier">${esc(c.dossier || '').split('\n\n').map((par) => `<p>${esc(par)}</p>`).join('')}</div>
+    </div>
+
     <div class="grid2">
       <div class="card">
         <h2>Kisilik</h2>
-        <div class="field"><label>Burc</label><b>${esc(p.zodiac)}</b></div>
         <div class="field"><label>Ozellikler</label>${p.traits.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>
         <div class="field"><label>Konusma tonu</label>${esc(p.tone)}</div>
         <div class="field"><label>Imza kancasi</label>${esc(p.signatureHook)}</div>
@@ -434,7 +545,6 @@ function renderDossier() {
         <div class="field"><label>Dil kaydi</label>${esc(p.voiceGuide.register)}</div>
         <div class="field"><label>Cumle uzunlugu</label>${esc(p.voiceGuide.sentenceLength)}</div>
         <div class="field"><label>Emoji kurali</label>${esc(p.voiceGuide.emojiRule)}</div>
-        <div class="field"><label>Kacinilacaklar</label>${p.voiceGuide.avoid.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>
       </div>
     </div>
 
@@ -443,7 +553,58 @@ function renderDossier() {
       <div>${p.contentPillars.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>
     </div>`;
 
+  const form = document.getElementById('charform');
+  wireForm(form, async () => {
+    S.edit = collectForm(form);
+    await renderDossier();
+  });
+
   document.getElementById('copycore').onclick = () => copy(S.status.identityLine);
+  document.getElementById('revert').onclick = async () => {
+    S.edit = null;
+    await renderDossier();
+    toast('Degisiklikler geri alindi.', 'ok');
+  };
+  document.getElementById('savechar').onclick = () => saveCharacter(collectForm(form));
+}
+
+async function saveCharacter(answers, clearReference) {
+  const btn = document.getElementById('savechar');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>kaydediliyor'; }
+  try {
+    const res = await api('/api/karakter/duzenle', { answers, clearReference: !!clearReference });
+    S.edit = null;
+    await refresh();
+
+    if (res.referenceStale) {
+      modal('Kimlik degisti', `
+        <p>Gorunus degistigi icin <b>seed yeniden hesaplandi</b>. Daha once uretilmis
+        vesikalik kareleri ve gorseller artik bu kisiyi gostermiyor olabilir.</p>
+        <p>Vesikalik setini silip yeni kimlikle bastan uretmek ister misin?</p>`,
+      [
+        { label: 'Kalsin, ben karar veririm', onClick: () => { closeModal(); render(); } },
+        {
+          label: 'Vesikaligi sil ve bastan uret',
+          className: 'btn',
+          onClick: async () => {
+            closeModal();
+            await api('/api/karakter/duzenle', { answers, clearReference: true });
+            await refresh();
+            S.tab = 'vesikalik';
+            render();
+            toast('Vesikalik seti silindi. Yeni kimlikle bastan uretebilirsin.', 'ok');
+          },
+        },
+      ]);
+      return;
+    }
+
+    render();
+    toast(res.identityChanged ? 'Kaydedildi. Kimlik degisti, seed yenilendi.' : 'Kaydedildi.', 'ok');
+  } catch (err) {
+    toast(err.message, 'bad');
+    if (btn) { btn.disabled = false; btn.textContent = 'Kaydet'; }
+  }
 }
 
 /* ------------------------------------------------------------ vesikalik */
