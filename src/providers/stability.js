@@ -9,6 +9,8 @@ module.exports = {
   docs: 'https://platform.stability.ai/docs/api-reference',
   blurb: 'Seed ve negatif prompt destekler; tutarlilik icin iyi bir denge.',
   supportsReference: false,
+  needs: 'Sadece API anahtari',
+  keyUrl: 'https://platform.stability.ai/account/keys',
   fields: [
     {
       key: 'apiKey',

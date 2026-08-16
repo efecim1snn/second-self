@@ -18,6 +18,8 @@ module.exports = {
   docs: null,
   blurb: 'Listede olmayan HER platform icin. Dokumanindaki adres, baslik ve govde sablonunu gir; otomasyon prompt\'u oraya gonderip donen gorseli kaydeder.',
   supportsReference: true,
+  needs: 'Platformun uc nokta adresi + anahtari',
+  keyUrl: null,
   fields: [
     {
       key: 'url',

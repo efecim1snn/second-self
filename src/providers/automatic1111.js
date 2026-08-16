@@ -14,6 +14,8 @@ module.exports = {
   docs: 'https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API',
   blurb: 'Kendi bilgisayarinda calisir: sifir maliyet, sinirsiz uretim. Referans gorsel varsa img2img ile yuz kilidi uygulanir.',
   supportsReference: true,
+  needs: 'Bilgisayarinda acik WebUI (--api bayragiyla)',
+  keyUrl: null,
   fields: [
     {
       key: 'baseUrl',

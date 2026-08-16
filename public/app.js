@@ -60,6 +60,7 @@ function modal(title, bodyHtml, actions) {
   const m = document.getElementById('modal');
   document.getElementById('modaltitle').textContent = title;
   document.getElementById('modalbody').innerHTML = bodyHtml;
+  document.getElementById('modalbody').scrollTop = 0;
   const bar = document.getElementById('modalactions');
   bar.innerHTML = '';
   for (const a of actions) {
@@ -72,6 +73,16 @@ function modal(title, bodyHtml, actions) {
   m.hidden = false;
 }
 function closeModal() { document.getElementById('modal').hidden = true; }
+
+// Kapatmanin uc yolu olsun: kose X, ESC tusu, arka plana tiklama.
+// Uzun listelerde alttaki buton gorunmezse bile pencere kapatilabilsin.
+document.getElementById('modalclose').onclick = closeModal;
+document.getElementById('modal').addEventListener('mousedown', (e) => {
+  if (e.target.id === 'modal') closeModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
 
 function riskBadge(risk) {
   if (risk === 'yuksek') return '<span class="risk high">YUKSEK RISK</span>';

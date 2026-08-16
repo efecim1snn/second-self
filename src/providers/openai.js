@@ -9,6 +9,8 @@ module.exports = {
   docs: 'https://platform.openai.com/docs/api-reference/images/create',
   blurb: 'Kurulumu en kolay secenek. Ama seed desteklemez; ayni yuzu birebir tekrarlamakta en zayif olan budur.',
   supportsReference: false,
+  needs: 'Sadece API anahtari',
+  keyUrl: 'https://platform.openai.com/api-keys',
   fields: [
     {
       key: 'apiKey',

@@ -19,6 +19,8 @@ module.exports = {
   docs: 'https://github.com/pollinations/pollinations/blob/master/APIDOCS.md',
   blurb: 'Ucretsiz ve API anahtari istemez - kurulumdan hemen sonra calisir. FLUX modeli, seed destegi var. Yogun saatlerde yavaslayabilir; kalite tavani ucretli platformlardan dusuktur.',
   supportsReference: false,
+  needs: 'Hicbir sey - ucretsiz, anahtar istemez',
+  keyUrl: null,
   fields: [
     {
       key: 'model',

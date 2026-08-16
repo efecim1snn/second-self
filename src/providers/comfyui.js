@@ -16,6 +16,8 @@ module.exports = {
   docs: 'https://docs.comfy.org/development/comfyui-server/comms_routes',
   blurb: 'En esnek yerel secenek. IPAdapter FaceID gibi dugumlerle en saglam yuz kilidini burada kurarsin.',
   supportsReference: true,
+  needs: 'Acik ComfyUI + workflow JSON',
+  keyUrl: null,
   fields: [
     {
       key: 'baseUrl',

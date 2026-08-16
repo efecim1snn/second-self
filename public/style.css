@@ -188,8 +188,43 @@ button.tiny { padding: 5px 10px; font-size: 11.5px; }
 /* display:flex, hidden niteliginin display:none'unu eziyordu; modal kutusu
    hep ekranda kaliyordu (siyah serit gibi gorunuyordu). */
 .modal[hidden] { display: none; }
-.modalbox { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; max-width: 560px; width: 100%; }
-.modalactions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* Modal kutusu ekrani asamaz: govde kendi icinde kayar, baslik ve
+   butonlar sabit kalir. Uzun prompt listelerinde "Kapat" butonu
+   ekranin altinda kayboluyordu. */
+.modalbox {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 24px;
+  max-width: 560px; width: 100%;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.modalhead {
+  flex: 0 0 auto; display: flex; align-items: flex-start; gap: 12px;
+  margin-bottom: 4px;
+}
+.modalhead h3 { margin: 0; flex: 1 1 auto; }
+.modalclose {
+  flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--line);
+  color: var(--dim); width: 32px; height: 32px; border-radius: 8px;
+  font-size: 20px; line-height: 1; cursor: pointer; font-family: inherit;
+}
+.modalclose:hover { color: var(--text); border-color: var(--accent); }
+
+#modalbody {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  /* Flex zinciri herhangi bir sebeple kirilirsa diye ikinci guvence: */
+  max-height: calc(100vh - 190px);
+  max-height: calc(100dvh - 190px);
+  overscroll-behavior: contain; padding-right: 4px;
+}
+.modalactions {
+  flex: 0 0 auto; display: flex; gap: 10px; justify-content: flex-end;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+  /* Butonlar her kosulda erisilebilir kalsin. */
+  position: sticky; bottom: 0; background: var(--panel);
+}
 
 /* ---------------------------------------------------------------- spinner */
 
@@ -199,3 +234,54 @@ button.tiny { padding: 5px 10px; font-size: 11.5px; }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
 .dim { color: var(--dim); }
 hr.sep { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
+
+/* ------------------------------------------------------------ responsive */
+
+/* Tablet */
+@media (max-width: 820px) {
+  main { padding: 20px 16px 70px; }
+  .topbar { padding: 12px 16px; gap: 12px; }
+  .brand strong { font-size: 12px; }
+  .providerchip { order: 3; width: 100%; text-align: center; }
+  .tabs {
+    order: 2; width: 100%; margin-left: 0;
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tabs button { white-space: nowrap; flex: 0 0 auto; }
+  h1 { font-size: 20px; }
+  .qtitle { font-size: 21px; }
+  .identity { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .choices { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .gallery { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+
+/* Telefon */
+@media (max-width: 560px) {
+  body { font-size: 14.5px; }
+  main { padding: 16px 12px 60px; }
+  .card { padding: 16px; border-radius: 12px; }
+  h1 { font-size: 18px; }
+  .qtitle { font-size: 19px; }
+  p.lead { font-size: 13.5px; }
+  .identity { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .choices { grid-template-columns: 1fr 1fr; }
+  .choice { padding: 11px 12px; font-size: 13px; }
+  .gallery { grid-template-columns: 1fr 1fr; }
+  .grid3 { grid-template-columns: 1fr; }
+  .row { gap: 8px; }
+  .row > button.btn, .row > button.ghost { flex: 1 1 auto; }
+  .core { font-size: 11.5px; padding: 11px; }
+  .modal { padding: 10px; }
+  .modalbox { padding: 18px; max-height: calc(100dvh - 20px); }
+  .modalactions { flex-direction: column-reverse; }
+  .modalactions button { width: 100%; }
+  .toastwrap { left: 12px; right: 12px; bottom: 12px; }
+  .toast { max-width: none; }
+  .risk { font-size: 9px; }
+}
+
+/* Cok dar ekran: iki sutun bile sikisiyorsa tek sutuna dus */
+@media (max-width: 380px) {
+  .choices, .gallery { grid-template-columns: 1fr; }
+}

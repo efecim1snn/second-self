@@ -299,6 +299,7 @@ const routes = {
       bodyType: clean.bodyType,
       measurements: clean.measurements,
       distinctive: clean.distinctive || [],
+      appearanceNote: clean.appearanceNote || '',
     };
 
     const lifeBlock = wizard.extractLife({ ...clean, name });

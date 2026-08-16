@@ -61,9 +61,12 @@ const REGION = {
 
 const SKIN = {
   'Cok acik (porselen)': 'very fair porcelain skin',
+  'Soluk / soguk ton': 'pale skin with cool undertones',
   'Acik': 'fair skin',
+  'Kizila calan acik': 'fair skin with rosy undertones',
   'Acik bugday': 'light tan skin',
   'Bugday': 'tan skin',
+  'Altin bugday': 'warm golden tan skin',
   'Zeytin': 'olive skin',
   'Orta esmer': 'medium brown skin',
   'Koyu esmer': 'deep brown skin',
@@ -73,10 +76,15 @@ const SKIN = {
 const EYES = {
   'Kahverengi': 'brown eyes',
   'Koyu kahve / siyaha yakin': 'near-black dark brown eyes',
+  'Acik kahve / bal': 'light honey-brown eyes',
   'Ela': 'hazel eyes',
   'Yesil': 'green eyes',
+  'Yesil-ela': 'green-hazel eyes',
   'Mavi': 'blue eyes',
+  'Koyu mavi': 'deep blue eyes',
+  'Buz mavisi': 'pale ice-blue eyes',
   'Gri': 'grey eyes',
+  'Gri-yesil': 'grey-green eyes',
   'Amber': 'amber eyes',
 };
 
@@ -84,33 +92,45 @@ const HAIR_COLOR = {
   'Siyah': 'black',
   'Koyu kahve': 'dark brown',
   'Kahverengi': 'brown',
+  'Kumral': 'chestnut brown',
   'Acik kahve': 'light brown',
+  'Bal sarisi': 'honey blonde',
   'Sari / blonde': 'blonde',
   'Platin': 'platinum blonde',
   'Kizil': 'auburn red',
+  'Bakir': 'copper red',
   'Gri / gumus': 'silver grey',
+  'Beyaz': 'white',
   'Renkli (fantezi)': 'vivid dyed',
 };
 
 const HAIR_STYLE = {
+  'Trasli / cok kisa': 'buzzcut',
   'Kisa duz': 'short straight',
   'Kisa dalgali': 'short wavy',
   'Kisa kivircik': 'short curly',
+  'Bob': 'chin-length bob',
+  'Dalgali bob': 'wavy chin-length bob',
   'Omuz hizasi duz': 'shoulder-length straight',
   'Omuz hizasi dalgali': 'shoulder-length wavy',
+  'Omuz hizasi kivircik': 'shoulder-length curly',
   'Uzun duz': 'long straight',
   'Uzun dalgali': 'long wavy',
   'Uzun kivircik': 'long curly',
   'Afro': 'natural afro',
+  'Sıkı bukleli (coil)': 'tightly coiled natural',
   'Orgu / braids': 'braided',
+  'Dredlok': 'locs',
   'Topuz': 'tied in a bun',
-  'Trasli / cok kisa': 'buzzcut',
+  'At kuyrugu': 'tied in a ponytail',
 };
 
 const BODY = {
   'Ince / zayif': 'slim slender build',
+  'Ince ve kaslı': 'lean toned build',
   'Atletik': 'athletic toned build',
   'Kaslı': 'muscular build',
+  'Cok kaslı (vucut gelistirme)': 'heavily muscular bodybuilder physique',
   'Kum saati': 'hourglass figure',
   'Armut': 'pear-shaped figure',
   'Elma': 'apple-shaped figure',
@@ -118,7 +138,10 @@ const BODY = {
   'Kivrimli': 'curvy figure',
   'Ortalama': 'average build',
   'Uzun ve ince (manken)': 'tall lean model build',
+  'Iri / plus size': 'plus-size full figure',
   'Balikci / iri yapili': 'broad sturdy build',
+  'Kucuk yapili (orantili kisa boy)': 'petite, proportionate short stature',
+  'Cucelik (akondroplazi)': 'a person with achondroplasia dwarfism, short stature with proportionally shorter arms and legs and an average-sized torso',
 };
 
 // Ayirt edici ozelliklerin Ingilizce tarifleri ve risk seviyeleri src/traits.js'te.
@@ -208,10 +231,14 @@ function physicalCore(identity, options = {}) {
   const list = distinctiveList(identity);
   const marks = options.facialOnly ? traits.describeFacial(list) : traits.describe(list);
 
+  // Kullanicinin serbest yazdigi ek gorunum notu her zaman prompt'a girer -
+  // listelerde olmayan hicbir sey elenmesin diye.
+  const note = (identity.appearanceNote || '').trim();
+
   if (options.short) {
     return [
       `${identity.age}-year-old ${ethnicity} ${gender}`,
-      skin, eyes, hair, ...marks,
+      skin, eyes, hair, ...marks, note,
     ].filter(Boolean).join(', ');
   }
 
@@ -234,6 +261,7 @@ function physicalCore(identity, options = {}) {
     body,
     ...stature,
     ...marks,
+    note,
   ];
 
   return parts.filter(Boolean).join(', ');

@@ -11,6 +11,8 @@ module.exports = {
   docs: 'https://docs.leonardo.ai/reference/creategeneration',
   blurb: 'Ucretsiz gunluk kredi verir. Karakter tutarliligi icin Image Guidance destegi vardir.',
   supportsReference: false,
+  needs: 'Sadece API anahtari',
+  keyUrl: 'https://app.leonardo.ai/api-access',
   fields: [
     {
       key: 'apiKey',

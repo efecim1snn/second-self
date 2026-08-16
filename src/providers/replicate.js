@@ -10,6 +10,8 @@ module.exports = {
   docs: 'https://replicate.com/docs/reference/http',
   blurb: 'Replicate uzerindeki her modeli calistirabilir. Referans gorseli data URI olarak gonderebildigi icin yuz kilidi burada calisir.',
   supportsReference: true,
+  needs: 'API anahtari (model adi hazir geliyor)',
+  keyUrl: 'https://replicate.com/account/api-tokens',
   fields: [
     {
       key: 'apiKey',

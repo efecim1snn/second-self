@@ -10,6 +10,8 @@ module.exports = {
   docs: 'https://docs.fal.ai/model-apis/quickstart',
   blurb: 'Hizli ve senkron calisir. FLUX ailesi icin en pratik secenek.',
   supportsReference: true,
+  needs: 'API anahtari (model yolu hazir geliyor)',
+  keyUrl: 'https://fal.ai/dashboard/keys',
   fields: [
     {
       key: 'apiKey',

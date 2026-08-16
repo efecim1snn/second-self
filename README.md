@@ -30,11 +30,20 @@ fal.ai, kendi bilgisayarındaki Stable Diffusion, ComfyUI — ya da listede olma
 Çalıştırdığında sırayla sorar:
 
 **Görünüş** — cinsiyet, bölge, ırk/etnik köken, ten rengi, göz rengi, saç rengi, saç tipi, yaş,
-vücut tipi, vücut ölçüleri, ayırt edici özellikler
+vücut tipi, vücut ölçüleri, ayırt edici özellikler, serbest ek görünüm notu
 
-**Hayat** — hangi şehirde yaşıyor, nerede doğdu, sosyoekonomik kökeni, annesi/babası ne iş yapıyor,
-kardeşi var mı, ilişki durumu, çocuğu, mesleği, geliri, nasıl bir evde yaşıyor, evcil hayvanı,
-nasıl ulaşıyor, hangi dilleri konuşuyor
+Hiçbir şeye otomasyon karar vermez, hepsini sen seçersin. Aralıklar bilerek geniş tutuldu:
+**boy 110–250 cm**, kilo 25–250 kg, yaş 18–90. Vücut tipleri arasında cücelik (akondroplazi),
+küçük yapılı, plus size gibi seçenekler de var. Listede olmayan bir şey istersen
+**"Ek görünüm detayı"** alanına yazarsın, prompt'a aynen girer.
+
+**Yaşadığı yer ve memleket** — kademeli seçim: **kıta → ülke → şehir**. 7 kıta, 60+ ülke, 200+ şehir.
+Memleketi de aynı şekilde seçilir ("yaşadığı şehirle aynı" kısayolu var). Listede olmayan şehri
+kendin yazabilirsin.
+
+**Hayat** — sosyoekonomik kökeni, annesi/babası ne iş yapıyor, kardeşi var mı, ilişki durumu,
+çocuğu, mesleği, geliri, nasıl bir evde yaşıyor, evcil hayvanı, nasıl ulaşıyor,
+hangi dilleri konuşuyor
 
 **Karakter** — burcu, eğitim düzeyi, ilgi alanları, günlük ritmi, hayatını değiştiren olay,
 en büyük korkusu, hayali, yaşam felsefesi, müzik zevki
@@ -145,6 +154,20 @@ bazen ters teper.
 Sihirbaz bunları seçerken risk rozeti gösterir, karakter kartında uyarı kalıcı olarak durur.
 
 ---
+
+## Zaten bir platforma para ödüyorsan: tek adımda bağla
+
+Bu araç senin bilgisayarında çalışır, kendi sunucusu yoktur, anahtarların hiçbir yere gitmez.
+OpenAI, Leonardo, Stability, Replicate veya fal.ai aboneliğin varsa yapman gereken tek şey:
+
+1. **Ayarlar** → platformu seç
+2. API anahtarını yapıştır
+3. **Kaydet** → **Bağlantıyı test et**
+
+Bitti. Model adı, çözünürlük, negatif prompt, seed — hepsi hazır geliyor, uğraşmana gerek yok.
+Listede olmayan bir platform kullanıyorsan (Higgsfield, Ideogram, Runware, kendi sunucun,
+bir Midjourney proxy'si) **Özel API** ile onu da bağlarsın; o zaman sadece platformun
+dokümanındaki adresi ve gövde şablonunu bir kez girmen gerekir.
 
 ## Görsel üretim platformunu bağlama
 

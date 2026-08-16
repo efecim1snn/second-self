@@ -4,7 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Second Self</title>
-  <link rel="stylesheet" href="/style.css">
+  <!-- ?v= surumu: tarayici eski CSS/JS'i onbellekten kullanmasin diye.
+       Arayuz degistiginde bu sayiyi artir. -->
+  <link rel="stylesheet" href="/style.css?v=3">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧬</text></svg>">
 </head>
 <body>
@@ -27,12 +29,15 @@
 
 <div class="modal" id="modal" hidden>
   <div class="modalbox">
-    <h3 id="modaltitle"></h3>
+    <div class="modalhead">
+      <h3 id="modaltitle"></h3>
+      <button class="modalclose" id="modalclose" title="Kapat (ESC)" aria-label="Kapat">&times;</button>
+    </div>
     <div id="modalbody"></div>
     <div class="modalactions" id="modalactions"></div>
   </div>
 </div>
 
-<script src="/app.js"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>

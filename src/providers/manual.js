@@ -15,6 +15,8 @@ module.exports = {
   docs: null,
   local: true,
   supportsReference: false,
+  needs: '-',
+  keyUrl: null,
   blurb: 'Hicbir uretim yapilmaz. Otomasyon prompt\'u hazirlar, sen kendi aracina yapistirirsin. Gorsel istiyorsan asagidakilerden birini bagla.',
   fields: [],
 
