@@ -1299,6 +1299,7 @@ const STUDIO_FORMS = {
 async function renderStudioDesign(studioId) {
   if (S.tab === 'arsiv') return renderStudioArchive(studioId);
   if (studioId === 'etsy' && S.tab === 'listeleme') return renderEtsyListing();
+  if (studioId === 'etsy' && S.tab === 'pazar') return renderEtsyPazar();
 
   const spec = STUDIO_FORMS[studioId];
   const opts = await api('/api/' + studioId + '/secenekler');
@@ -1434,6 +1435,17 @@ async function generateDesign(studioId) {
 async function renderEtsyListing() {
   if (!S.listing) S.listing = { phrase: '', niche: '', size: 'tisort', audience: '', keywords: [] };
   const l = S.listing;
+
+  // TASARIMDAKI SOZ OTOMATIK GELIR. Eskiden kullanici ayni sozu iki kez
+  // yaziyordu: bir kez "Tasarim" sekmesinde satir olarak, bir kez burada.
+  if (!l.phrase) {
+    const satirlar = (S.design.etsy || {}).lines;
+    const metin = Array.isArray(satirlar) ? satirlar.filter(Boolean).join(' ') : '';
+    if (metin) l.phrase = metin;
+  }
+
+  let nisler = [];
+  try { nisler = (await api('/api/etsy/nisler')).nisler; } catch { nisler = []; }
   view.innerHTML = `
     <h1>Etsy listeleme metni</h1>
     <p class="lead">Etsy aramasi baslik ve etiketlerde yasiyor; cogu satici tam burada kaybediyor.
@@ -1441,14 +1453,68 @@ async function renderEtsyListing() {
     <div class="card">
       <div class="grid3">
         <div class="field"><label>Tasarimdaki soz</label><input id="l_phrase" value="${esc(l.phrase)}" placeholder="Powered By Coffee And Cat Hair"></div>
-        <div class="field"><label>Kategori / tema</label><input id="l_niche" value="${esc(l.niche)}" placeholder="cat lover"></div>
+        <div class="field"><label>Nis / kategori</label>
+          <input id="l_niche" value="${esc(l.niche)}" placeholder="kedi, hemsire, kamp..." list="nislistesi">
+          <datalist id="nislistesi">${nisler.map((n) => `<option value="${esc(n.label)}">${esc(n.en)}</option>`).join('')}</datalist>
+          <p class="help">Turkce yazabilirsin - kutuphanedekiler Ingilizceye cevrilir (kedi -> cat).</p>
+        </div>
         <div class="field"><label>Hedef kitle</label><input id="l_aud" value="${esc(l.audience)}" placeholder="for women"></div>
       </div>
       <div class="field"><label>Anahtar kelimeler (virgulle ayir)</label>
         <input id="l_kw" value="${esc((l.keywords || []).join(', '))}" placeholder="cat mom, crazy cat lady"></div>
-      <div class="row"><button class="btn" id="lgo">Uret</button></div>
+      <div class="field">
+        <label>Cok satan nisler <span class="dim">(tikla, doldursun)</span></label>
+        <div class="nisler">${nisler.map((n) => `<button class="ghost tiny" data-nis="${esc(n.label)}">${esc(n.label)}</button>`).join('')}</div>
+        <p class="help">2026 POD pazar arastirmasindan; anahtar gerektirmez, araca gomulu.
+        Listede olmayan nisi elle yazabilirsin.</p>
+      </div>
+      <div class="row">
+        <button class="btn" id="lgo">Uret</button>
+        <button class="ghost" id="lsoz">Soz onerileri</button>
+      </div>
     </div>
+    <div id="lsozout"></div>
     <div id="lout"></div>`;
+
+  view.querySelectorAll('[data-nis]').forEach((b) => {
+    b.onclick = () => { document.getElementById('l_niche').value = b.dataset.nis; };
+  });
+
+  document.getElementById('lsoz').onclick = async () => {
+    const kutu = document.getElementById('lsozout');
+    const nis = document.getElementById('l_niche').value;
+    if (!nis) return toast('Once bir nis yaz veya sec.', 'bad');
+    kutu.innerHTML = '<div class="card"><span class="spin"></span>oneriler hazirlaniyor...</div>';
+    try {
+      const r = await api('/api/etsy/nis/oneriler', { nis, urunKelimeleri: ['shirt', 'tee'] });
+      kutu.innerHTML = `
+        <div class="card">
+          <h2>Soz kaliplari</h2>
+          <p class="help">Hepsi JENERIK tur kalibi - kimsenin tasarimi degil. Nisinle doldurulur,
+          cikan soz senin olur. Tikla, tasarim metnine gecsin.</p>
+          ${r.sozler.map((s) => `
+            <div class="sozsatir">
+              <div>
+                <b>${esc(s.lines.join(' / '))}</b>
+                <div class="dim" style="font-size:12px">${esc(s.label)} - ${esc(s.hint)}</div>
+              </div>
+              <button class="ghost tiny" data-soz="${esc(JSON.stringify(s.lines))}">Tasarima gecir</button>
+            </div>`).join('')}
+        </div>`;
+      kutu.querySelectorAll('[data-soz]').forEach((b) => {
+        b.onclick = () => {
+          const satirlar = JSON.parse(b.dataset.soz);
+          S.design.etsy = { ...(S.design.etsy || {}), lines: satirlar };
+          S.listing.phrase = satirlar.join(' ');
+          toast('Tasarim metnine gecirildi.', 'ok');
+          S.tab = 'tasarim';
+          render();
+        };
+      });
+    } catch (err) {
+      kutu.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+    }
+  };
 
   document.getElementById('lgo').onclick = async () => {
     S.listing = {
@@ -1579,6 +1645,144 @@ function renderCaptions(box, data) {
   box.querySelectorAll('[data-cap]').forEach((b) => {
     b.onclick = () => copy(data.variants[Number(b.dataset.cap)].text);
   });
+}
+
+/* ------------------------------------------------- Etsy pazar arastirmasi */
+
+async function renderEtsyPazar() {
+  let d;
+  try { d = await api('/api/etsy/pazar/durum'); }
+  catch (err) { view.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`; return; }
+
+  const k = d.kurulum;
+  view.innerHTML = `
+    <h1>Pazar arastirmasi</h1>
+    <p class="lead">Bir niste neyin calistigini <b>desen olarak</b> gosterir: hangi etiketler
+    tekrar ediyor, fiyatlar nerede kumelenmis, basliklar nasil kurulmus.</p>
+
+    <div class="notice info">
+      <b>Bu ekran kimsenin tasarimini kopyalamaz.</b> Rakiplerin gorselini, cizimini veya ozgun
+      sozunu saklamaz; yalnizca <b>desen</b> cikarir. Tasarim her zaman sifirdan kurulur -
+      hem Etsy kopyaci magazalari kapatiyor hem de gerek yok.
+    </div>
+
+    ${d.hazir ? '' : `
+    <div class="card">
+      <h2>${esc(k.baslik)}</h2>
+      <p class="help">${esc(k.neden)}</p>
+      <ol class="adimlar">${k.adimlar.map((a) => `<li>${esc(a)}</li>`).join('')}</ol>
+      <p class="help">
+        <a href="${esc(k.kayitUrl)}" target="_blank" rel="noreferrer">${esc(k.kayitUrl)}</a> ·
+        <a href="${esc(k.dokumanUrl)}" target="_blank" rel="noreferrer">Etsy API dokumani</a>
+      </p>
+      ${k.notlar.map((n) => `<p class="help">• ${esc(n)}</p>`).join('')}
+    </div>`}
+
+    <div class="card">
+      <h2>Etsy API anahtari</h2>
+      <div class="field">
+        <label>Keystring</label>
+        <input id="p_key" value="${esc(d.anahtar)}" placeholder="Etsy gelistirici panelinden aldigin anahtar" spellcheck="false">
+        <p class="help">${d.hazir
+          ? 'Kayitli. Yalnizca bu bilgisayarda <span class="mono">data/etsy-api.json</span> icinde durur.'
+          : 'Henuz girilmedi - yukaridaki adimlari izle.'}</p>
+      </div>
+      <div class="row"><button class="btn" id="pkaydet">Kaydet</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Arastir</h2>
+      <div class="grid3">
+        <div class="field"><label>Nis / anahtar kelime</label>
+          <input id="p_kw" placeholder="cat mom shirt" spellcheck="false"></div>
+        <div class="field"><label>Siralama</label>
+          <select id="p_sort">${Object.entries(d.siralama).map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></div>
+        <div class="field"><label>Kayit sayisi</label>
+          <select id="p_limit"><option>50</option><option selected>100</option></select></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="pgo" ${d.hazir ? '' : 'disabled'}>Arastir</button>
+        ${d.hazir ? '' : '<span class="dim">once anahtari kaydet</span>'}
+      </div>
+      <p class="help">Istek yalnizca sen bu dugmeye bastiginda gider. Arka planda surekli
+      tarama YAPILMAZ - hem Etsy hiz siniri uygular hem de gerek yok.</p>
+    </div>
+    <div id="pout"></div>`;
+
+  document.getElementById('pkaydet').onclick = async (e) => {
+    e.target.disabled = true;
+    try {
+      await api('/api/etsy/pazar/anahtar', { apiKey: document.getElementById('p_key').value });
+      toast('Anahtar kaydedildi.', 'ok');
+      render();
+    } catch (err) { toast(err.message, 'bad'); e.target.disabled = false; }
+  };
+
+  const go = document.getElementById('pgo');
+  if (go) {
+    go.onclick = async () => {
+      const kutu = document.getElementById('pout');
+      go.disabled = true;
+      kutu.innerHTML = '<div class="card"><span class="spin"></span>Etsy sorgulaniyor...</div>';
+      try {
+        const r = await api('/api/etsy/pazar/arastir', {
+          keywords: document.getElementById('p_kw').value,
+          sortOn: document.getElementById('p_sort').value,
+          limit: Number(document.getElementById('p_limit').value),
+        });
+        renderPazarSonuc(kutu, r);
+      } catch (err) {
+        kutu.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+      } finally { go.disabled = false; }
+    };
+  }
+}
+
+function renderPazarSonuc(kutu, r) {
+  const a = r.analiz;
+  if (!a.adet) { kutu.innerHTML = '<div class="notice warn">Sonuc bulunamadi.</div>'; return; }
+
+  kutu.innerHTML = `
+    <div class="card">
+      <h2>${esc(r.sorgu)} · ${a.adet} liste incelendi</h2>
+      ${a.ogutler.map((o) => `<p class="help">• ${esc(o)}</p>`).join('')}
+    </div>
+
+    <div class="card">
+      <h2>En cok tekrar eden etiketler</h2>
+      <p class="help">Bu nisin gercek arama dili. <span class="tag kotu">tek kelime</span> isaretli
+      olanlar zayif - senin firsatin cok kelimeli terimlerde.</p>
+      <table class="cmptable"><thead><tr><th>Etiket</th><th>Kac listede</th><th>Oran</th><th></th></tr></thead>
+      <tbody>${a.etiketler.slice(0, 20).map((e) => `
+        <tr>
+          <td data-label="Etiket"><span class="mono">${esc(e.etiket)}</span></td>
+          <td data-label="Kac listede">${e.kac}</td>
+          <td data-label="Oran">%${e.oran}</td>
+          <td data-label="Not">${e.tekKelime ? '<span class="tag kotu">tek kelime</span>' : '<span class="tag iyi">uzun kuyruk</span>'}</td>
+        </tr>`).join('')}</tbody></table>
+      <div class="row" style="margin-top:10px">
+        <button class="ghost tiny" id="pkopya">Uzun kuyruklu olanlari kopyala</button>
+      </div>
+    </div>
+
+    ${a.fiyat ? `<div class="card">
+      <h2>Fiyat</h2>
+      <p>Ortanca <b>${a.fiyat.ortanca}</b> · aralik ${a.fiyat.enDusuk.toFixed(2)} - ${a.fiyat.enYuksek.toFixed(2)}
+      <span class="dim">(${a.fiyat.adet} listede fiyat okunabildi)</span></p>
+    </div>` : ''}
+
+    <div class="card">
+      <h2>Basliklar</h2>
+      <p>Ortanca uzunluk <b>${a.baslik.ortancaUzunluk}</b> karakter · en uzun ${a.baslik.enUzun}
+      <span class="dim">(Etsy siniri 140)</span></p>
+      <p class="help">Basliklarda tekrar eden kelimeler:
+      ${a.baslikKelimeleri.slice(0, 15).map((x) => `<span class="pill">${esc(x.kelime)} (${x.kac})</span>`).join(' ')}</p>
+    </div>`;
+
+  const kop = document.getElementById('pkopya');
+  if (kop) {
+    kop.onclick = () => copy(a.etiketler.filter((e) => !e.tekKelime).slice(0, 13).map((e) => e.etiket).join(', '));
+  }
 }
 
 /* ---------------------------------------------------------------- gallery */

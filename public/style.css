@@ -482,3 +482,13 @@ button.ghost.danger:hover { background: rgba(255,77,109,.1); }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* --------------------------------------------------- Etsy nis / pazar */
+.nisler { display: flex; flex-wrap: wrap; gap: 6px; }
+.adimlar { margin: 10px 0 10px 20px; padding: 0; font-size: 14px; line-height: 1.8; color: #c9c4de; }
+.adimlar li { margin-bottom: 2px; }
+.sozsatir {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.sozsatir:last-child { border-bottom: 0; }

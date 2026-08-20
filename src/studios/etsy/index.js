@@ -19,6 +19,8 @@ const store = require('../../store');
 const output = require('../../output');
 const design = require('./design');
 const listing = require('./listing');
+const niches = require('./niches');
+const pazar = require('./pazar');
 const render = require('../../raster');
 
 function badRequest(message) {
@@ -36,6 +38,7 @@ module.exports = {
   tabs: [
     { id: 'tasarim', label: 'Tasarim' },
     { id: 'listeleme', label: 'Listeleme metni' },
+    { id: 'pazar', label: 'Pazar arastirmasi' },
     { id: 'arsiv', label: 'Arsiv' },
   ],
 
@@ -123,6 +126,82 @@ module.exports = {
       }
 
       return { image: item, size, dpi: 300, transparent: true, export: job ? { name: job.name, path: job.path } : null };
+    },
+
+    /* ------------------------------------------------- nis kutuphanesi */
+
+    /**
+     * ANAHTAR GEREKTIRMEZ. Nis kutuphanesi ve soz kaliplari araca gomulu -
+     * kullanicinin hicbir sey baglamasina gerek yok.
+     */
+    'GET /nisler': async () => ({
+      nisler: niches.list(),
+      not: 'Bu liste araca gomulu; anahtar gerektirmez. Canli pazar verisi icin "Pazar arastirmasi" sekmesine bak.',
+    }),
+
+    'POST /nis/oneriler': async (body) => {
+      const nis = body.nis || '';
+      if (!nis) throw badRequest('Once bir nis sec veya yaz.');
+      return {
+        nis: niches.resolve(nis),
+        etiketler: niches.expandTags(nis, body.urunKelimeleri, body.hedef, body.ekstra),
+        sozler: niches.suggestPhrases(nis, body.rol, body.yil),
+      };
+    },
+
+    /* ----------------------------------------------- canli pazar (opsiyonel) */
+
+    /**
+     * Anahtar KULLANICININ. Otomasyonun kendi Etsy anahtari yoktur ve
+     * olmayacak: public bir depoda paylasilan anahtar ilk gunde calinir ve
+     * Etsy tarafindan kapatilir. Herkes kendi anahtarini baglar - gorsel
+     * uretim saglayicilarindaki duzenin aynisi.
+     */
+    'GET /pazar/durum': async () => {
+      const cfg = pazar.getConfig();
+      return {
+        hazir: cfg.hazir,
+        anahtar: pazar.maskedKey(),
+        siralama: pazar.SORT,
+        kurulum: {
+          baslik: 'Etsy API anahtarini kendin aliyorsun - ucretsiz',
+          neden: 'Bu otomasyonun kendi Etsy anahtari YOKTUR. Public bir depoda paylasilan anahtar herkesin eline gecer ve Etsy tarafindan kapatilir. Bu yuzden herkes kendi anahtarini baglar; gorsel uretim saglayicilarinda da duzen aynidir.',
+          adimlar: [
+            'Etsy hesabinla giris yap (satici hesabi sart degil, normal hesap yeter).',
+            'etsy.com/developers/register adresine git ve "Create a New App" de.',
+            'Uygulamaya bir ad ver (ornek: "kendi magaza arastirmam") ve ne yapacagini kisaca yaz.',
+            'API kullanim sartlarini kabul et.',
+            'Onaydan sonra sana bir "Keystring" verilir - API anahtarin odur.',
+            'O anahtari asagidaki kutuya yapistir ve Kaydet de.',
+          ],
+          notlar: [
+            'Anahtar yalnizca bu bilgisayarda data/etsy-api.json icinde durur; hicbir yere gonderilmez.',
+            'Yeni uygulamalar once kisisel/test kipinde baslar. Bazi uc noktalar Etsy onayi isteyebilir; anahtar reddedilirse panel bunu acikca soyler.',
+            'Etsy hiz siniri uygular. Arka planda surekli tarama YAPILMAZ - yalnizca sen "Arastir" dedigin an istek gider.',
+          ],
+          kayitUrl: 'https://www.etsy.com/developers/register',
+          dokumanUrl: 'https://developers.etsy.com/documentation/',
+        },
+      };
+    },
+
+    'POST /pazar/anahtar': async (body) => {
+      pazar.saveConfig({ apiKey: body.apiKey });
+      return { hazir: pazar.getConfig().hazir, anahtar: pazar.maskedKey() };
+    },
+
+    'POST /pazar/arastir': async (body) => {
+      const kelimeler = String(body.keywords || '').trim();
+      if (!kelimeler) throw badRequest('Aranacak nis veya anahtar kelime yaz.');
+      return pazar.research({
+        keywords: kelimeler,
+        limit: body.limit,
+        sayfa: body.sayfa,
+        sortOn: body.sortOn,
+        sortOrder: body.sortOrder,
+        minPrice: body.minPrice,
+        maxPrice: body.maxPrice,
+      });
     },
 
     'POST /listeleme': async (body) => {

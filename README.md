@@ -269,6 +269,60 @@ Listede olmayan bir platform kullanıyorsan (Higgsfield, Ideogram, Runware, kend
 bir Midjourney proxy'si) **Özel API** ile onu da bağlarsın; o zaman sadece platformun
 dokümanındaki adresi ve gövde şablonunu bir kez girmen gerekir.
 
+## Etsy: niş kütüphanesi ve pazar araştırması
+
+İki katman var. **Birincisi anahtar istemez.**
+
+### Katman 1 — gömülü niş kütüphanesi (kurulum yok)
+
+15 niş, gerçek arama terimleriyle birlikte araca gömülü (2026 POD pazar araştırmasından:
+meslek grupları, evcil hayvan, retro spor, oyun, teknoloji mizahı…). Bir niş seç ya da
+kendi nişini yaz; sistem şunları üretir:
+
+- **13 uzun kuyruklu etiket** — tek kelimelik etiket üretmez. Etsy'de "shirt" gibi tek
+  kelimede rekabet o kadar yüksek ki görünme şansın yok; değer alıcının gerçekten yazdığı
+  çok kelimeli terimde ("funny cat mom shirt").
+- **Öne yüklenmiş başlık** — Etsy başlığın ilk kelimelerine ağırlık veriyor, o yüzden
+  aranan terim (`cat shirt`) başta, tasarımın sözü sonra.
+- **Söz kalıpları** — jenerik tür gelenekleri (`... MOM`, `POWERED BY ...`, `... CLUB EST.`),
+  nişinle doldurulur. Tek tıkla tasarım metnine geçer.
+
+Türkçe yazabilirsin: `kedi` → `cat`. Kütüphanede olmayan nişte jenerik kalıplara düşer
+ve bunu sana söyler.
+
+### Katman 2 — canlı Etsy verisi (kendi API anahtarın, ücretsiz)
+
+**Bu otomasyonun kendi Etsy anahtarı YOKTUR ve olmayacak.** Public bir depoda paylaşılan
+anahtar herkesin eline geçer ve Etsy tarafından kapatılır. Görsel üretim sağlayıcılarında
+da düzen aynı: herkes kendi anahtarını bağlar.
+
+**Anahtarı nasıl alırsın** (5 dakika, ücretsiz):
+
+1. Etsy hesabınla giriş yap — satıcı hesabı şart değil, normal hesap yeter.
+2. [etsy.com/developers/register](https://www.etsy.com/developers/register) → **Create a New App**
+3. Uygulamaya bir ad ver ve ne yapacağını kısaca yaz.
+4. API kullanım şartlarını kabul et.
+5. Onaydan sonra sana bir **Keystring** verilir — API anahtarın odur.
+6. Panelde **Etsy POD → Pazar araştırması** sekmesine yapıştır, Kaydet.
+
+Anahtar yalnızca senin bilgisayarında `data/etsy-api.json` içinde durur, hiçbir yere gönderilmez.
+
+> Yeni uygulamalar önce kişisel/test kipinde başlar. Bazı uç noktalar Etsy onayı isteyebilir;
+> anahtar reddedilirse panel bunu açıkça söyler.
+
+**Ne yapar:** bir nişte neyin çalıştığını **desen olarak** çıkarır — hangi etiketler kaç
+listede geçiyor, fiyatlar nerede kümelenmiş, başlıklar kaç karakter, rakiplerin kaçta kaçı
+zayıf tek-kelime etiket kullanıyor (bu senin fırsatın).
+
+**Ne yapmaz:** sayfa kazımaz, arka planda sürekli tarama yapmaz, kimsenin tasarımını,
+görselini veya özgün sözünü kopyalamaz/saklamaz. İstek yalnızca sen "Araştır" dediğinde gider.
+
+> **Neden kazıyıcı değil:** Etsy'nin bot koruması var; ev IP'sinden düzenli tarama engellenir
+> ve aynı IP'den giren mağaza da riske girer. Etsy'de satış yapmak isterken Etsy'yi taramak
+> kendi ayağına sıkmaktır. Resmi API zaten arama + filtre + sıralama veriyor.
+
+---
+
 ## Çıktılar nereye gidiyor?
 
 Her iş için masaüstünde **ayrı bir klasör** açılır. Görsel, prompt ve gönderi metni
