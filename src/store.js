@@ -17,6 +17,7 @@ const CHARACTER_FILE = path.join(DATA_DIR, 'character.json');
 const PROVIDERS_FILE = path.join(DATA_DIR, 'providers.json');
 const GALLERY_FILE = path.join(DATA_DIR, 'gallery.json');
 const APP_FILE = path.join(DATA_DIR, 'app.json');
+const UPSCALER_FILE = path.join(DATA_DIR, 'upscaler.json');
 
 function ensureDirs() {
   for (const dir of [DATA_DIR, IMAGES_DIR]) {
@@ -70,6 +71,15 @@ function saveAppState(state) {
 }
 
 /* --------------------------------------------------------------- saglayici */
+
+/** Buyutme (upscale) ayari - saglayici ayarindan ayri tutulur. */
+function getUpscalerConfig() {
+  return readJson(UPSCALER_FILE, { active: 'none', scale: 2, entries: {} });
+}
+
+function saveUpscalerConfig(config) {
+  return writeJson(UPSCALER_FILE, config);
+}
 
 function getProviderConfig() {
   // Varsayilan: Pollinations - ucretsiz ve anahtar istemez, boylece otomasyon
@@ -182,6 +192,8 @@ module.exports = {
   saveAppState,
   getProviderConfig,
   saveProviderConfig,
+  getUpscalerConfig,
+  saveUpscalerConfig,
   getGallery,
   saveGallery,
   addGalleryItem,

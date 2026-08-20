@@ -26,6 +26,7 @@ const reference = require('./src/reference');
 const brief = require('./src/brief');
 const welcome = require('./src/welcome');
 const providers = require('./src/providers');
+const upscalers = require('./src/upscalers');
 
 const PORT = Number(process.env.PORT || 4200);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -219,10 +220,36 @@ async function generateScene(character, scene, count = 1) {
     ...(spec.supportsReference ? referencePayload(character, effectiveScene) : {}),
   });
 
+  // Buyutme adimi: uretilen kare, bagli buyutme aracina gonderilir.
+  // Ucretsiz saglayici ~686x858 donduruyor; Instagram 1080 istiyor.
+  const upCfg = store.getUpscalerConfig();
+  const upSpec = upscalers.get(upCfg.active || 'none');
+  const upConf = (upCfg.entries && upCfg.entries[upSpec.id]) || {};
+
   const saved = [];
   for (const image of result.images || []) {
-    const ext = image.mime === 'image/jpeg' ? 'jpg' : image.mime === 'image/webp' ? 'webp' : 'png';
-    const file = store.saveImageBuffer(image.buffer, ext);
+    let out = image;
+    let upscaled = null;
+    if (upSpec.id !== 'none') {
+      try {
+        const up = await upSpec.upscale({
+          config: upConf,
+          buffer: image.buffer,
+          scale: Math.min(Math.max(Number(upCfg.scale) || 2, 1), upSpec.maxScale || 4),
+        });
+        if (up && up.buffer && !up.skipped) {
+          out = { buffer: up.buffer, mime: up.mime || 'image/png' };
+          upscaled = { by: upSpec.id, scale: upCfg.scale || 2 };
+        }
+      } catch (err) {
+        // Buyutme basarisiz olursa uretimi CÖPE ATMA - orijinali kaydet,
+        // sadece uyariyi tasi. Kullanici parasini odedigi kareyi kaybetmesin.
+        upscaled = { by: upSpec.id, failed: true, error: err.message };
+      }
+    }
+    const image2 = out;
+    const ext = image2.mime === 'image/jpeg' ? 'jpg' : image2.mime === 'image/webp' ? 'webp' : 'png';
+    const file = store.saveImageBuffer(image2.buffer, ext);
     const item = {
       id: file.id,
       filename: file.filename,
@@ -236,6 +263,7 @@ async function generateScene(character, scene, count = 1) {
       seed: built.seed,
       scene,
       category: scene.categoryLabel || scene.category || null,
+      upscaled,
       isGolden: false,
     };
     store.addGalleryItem(item);
@@ -585,6 +613,31 @@ const routes = {
     const character = store.getCharacter();
     if (!character) throw notFound('Once karakter yarat.');
     return { plan: brief.weeklyPlan(character), tasks: brief.taskList() };
+  },
+
+  /* ------------------------------------------------------ buyutme (upscale) */
+
+  'GET /api/buyutme': async () => {
+    const cfg = store.getUpscalerConfig();
+    return {
+      active: cfg.active || 'none',
+      scale: cfg.scale || 2,
+      upscalers: upscalers.list().map((u) => ({
+        ...u,
+        config: maskConfig(upscalers.get(u.id), (cfg.entries && cfg.entries[u.id]) || {}),
+      })),
+    };
+  },
+
+  'POST /api/buyutme': async (body) => {
+    const spec = upscalers.get(body.id);
+    const cfg = store.getUpscalerConfig();
+    cfg.entries = cfg.entries || {};
+    cfg.entries[spec.id] = mergeConfig(spec, cfg.entries[spec.id], body.config || {});
+    if (body.makeActive) cfg.active = spec.id;
+    if (body.scale != null) cfg.scale = Math.min(Math.max(Number(body.scale) || 2, 1), 4);
+    store.saveUpscalerConfig(cfg);
+    return { active: cfg.active, scale: cfg.scale, config: maskConfig(spec, cfg.entries[spec.id]) };
   },
 
   'GET /api/saglayicilar': async () => {

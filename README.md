@@ -168,6 +168,39 @@ Aynı yüzü her seferinde yakalamak dört katmandır:
 > yerel ComfyUI (IPAdapter FaceID) veya karakter referansı destekleyen bir servis.
 > Panel, bağlı platform bu ikisini desteklemiyorsa seni açıkça uyarır.
 
+## Çözünürlük ve büyütme — "4K" meselesi
+
+**Hiçbir ücretsiz API doğrudan 4K üretmiyor**, ve bu cimrilik değil mimari: difüzyon modelleri ~1 MP'de
+eğitiliyor, zorla daha büyüğünü isteyince anatomi bozuluyor (ikinci kafa, üçüncü kol). Herkesin yaptığı
+şey aynı: **önce ~1 MP üret, sonra büyüt.**
+
+Ölçtük — Pollinations istenen ölçüyü tamamen yok sayıyor:
+
+| İstenen | Gelen |
+|---|---|
+| 1024×1280 | 686×858 |
+| 2048×2560 | 686×858 |
+| 3072×3840 | 686×858 |
+
+Yani ücretsiz katman **0,6 MP** veriyor. Bu Instagram'ın istediği 1080 pikselin bile altında — IG
+yüklerken yukarı ölçekliyor ve görüntü yumuşuyor. Büyütme "4K hevesi" değil, temel kalite ihtiyacı.
+
+**Ayarlar → Büyütme** bölümünden bir büyütme aracı bağlarsın (sağlayıcı deseninin ikizi — bu yazılım
+kendi başına büyütme de yapmaz):
+
+| Araç | Maliyet | Not |
+|---|---|---|
+| **Yerel Stable Diffusion (A1111/Forge)** | **Ücretsiz, sınırsız** | Real-ESRGAN hazır gelir. Görsel üretimini başka yerden alsan bile büyütmeyi buraya yaptırabilirsin. |
+| Replicate (Real-ESRGAN vb.) | Çok ucuz | GPU'n yoksa en pratik yol |
+| Özel büyütme API'si | Değişir | Upscayl sunucusu, kendi kurulumun, herhangi bir servis |
+| Kapalı | — | Varsayılan |
+
+Büyütme başarısız olursa **üretilen kare çöpe atılmaz** — orijinali kaydedilir, sadece uyarı düşülür.
+Kullanıcı parasını ödediği kareyi kaybetmesin.
+
+> Dürüst not: **Instagram akışta zaten 1080 piksele düşürüyor.** 4K yalnızca baskı veya agresif kırpma
+> için anlamlı. Asıl kazanç 686 → 1080+ arasında.
+
 ## Gerçekçilik ayarı
 
 Üretim ekranında üç seviye var:
@@ -319,6 +352,7 @@ src/
   scenes.js            poz/kıyafet/ortam/ışık üretimi
   store.js             JSON kalıcılık + sıfırlama
   providers/           görsel üretim platformları (her biri tek dosya)
+  upscalers/           büyütme araçları (aynı desen: sen bağlarsın)
 public/                panel arayüzü
 data/                  karakterin, anahtarların, görsellerin (git'e girmez)
 ```

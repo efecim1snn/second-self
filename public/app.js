@@ -1130,6 +1130,29 @@ function renderSettings() {
     </div>
 
     <div class="card">
+      <h2>Buyutme (upscale)</h2>
+      <p class="help">Difuzyon modelleri ~1 MP'de egitiliyor; daha buyugunu zorlayinca anatomi bozuluyor.
+      Herkesin yaptigi sey ayni: once uret, sonra buyut. Ucretsiz saglayici ~686x858 donduruyor,
+      Instagram 1080 istiyor - yani buyutme "4K hevesi" degil, temel kalite ihtiyaci.</p>
+      <div class="field">
+        <label>Buyutme araci</label>
+        <select id="upsel"></select>
+        <p class="help" id="upblurb"></p>
+      </div>
+      <div class="field" style="max-width:220px">
+        <label>Olcek</label>
+        <select id="upscale">
+          <option value="1">1x (kapali)</option>
+          <option value="2">2x</option>
+          <option value="3">3x</option>
+          <option value="4">4x</option>
+        </select>
+      </div>
+      <div id="upfields"></div>
+      <div class="row"><button class="btn" id="upsave">Kaydet</button></div>
+    </div>
+
+    <div class="card">
       <h2 style="color:#ff8fa3">TUM VERIYI SIL</h2>
       <p class="lead">Karakteri, vesikalik setini ve uretilen tum gorselleri kaldirir; sihirbaz sifirdan baslar.
       Karakter bir kez kilitlendigi icin yeni bir insan yaratmanin tek yolu budur.</p>
@@ -1222,6 +1245,60 @@ function renderSettings() {
       },
     ]);
   };
+
+  drawUpscalers();
+
+  async function drawUpscalers() {
+    const data = await api('/api/buyutme');
+    const sel = document.getElementById('upsel');
+    sel.innerHTML = data.upscalers.map((u) =>
+      `<option value="${u.id}" ${u.id === data.active ? 'selected' : ''}>${esc(u.label)}</option>`).join('');
+    document.getElementById('upscale').value = String(data.scale || 2);
+
+    const paint = () => {
+      const u = data.upscalers.find((x) => x.id === sel.value);
+      document.getElementById('upblurb').textContent = u.blurb || '';
+      const box = document.getElementById('upfields');
+      box.innerHTML = (u.fields || []).map((f) => {
+        const val = u.config[f.key] != null && u.config[f.key] !== '' ? u.config[f.key] : (f.default != null ? f.default : '');
+        const note = u.config[`${f.key}__set`] ? '<p class="help">🔒 Kayitli deger gizlendi.</p>' : '';
+        if (f.type === 'select') {
+          return `<div class="field"><label>${esc(f.label)}</label>
+            <select id="uf_${f.key}">${f.options.map((o) => `<option ${o === val ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>
+            ${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}</div>`;
+        }
+        if (f.type === 'textarea') {
+          return `<div class="field"><label>${esc(f.label)}</label><textarea id="uf_${f.key}">${esc(val)}</textarea>
+            ${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}${note}</div>`;
+        }
+        return `<div class="field"><label>${esc(f.label)}${f.required ? ' *' : ''}</label>
+          <input id="uf_${f.key}" type="${f.type === 'number' ? 'number' : 'text'}" value="${esc(val)}">
+          ${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}${note}</div>`;
+      }).join('') || '<p class="dim">Bu secenekte ayar yok.</p>';
+    };
+    paint();
+    sel.onchange = paint;
+
+    document.getElementById('upsave').onclick = async (e) => {
+      const u = data.upscalers.find((x) => x.id === sel.value);
+      const config = {};
+      for (const f of (u.fields || [])) {
+        const el = document.getElementById(`uf_${f.key}`);
+        if (el) config[f.key] = f.type === 'number' ? Number(el.value) : el.value;
+      }
+      e.target.disabled = true;
+      try {
+        await api('/api/buyutme', {
+          id: u.id, config, makeActive: true,
+          scale: Number(document.getElementById('upscale').value),
+        });
+        toast('Buyutme ayari kaydedildi.', 'ok');
+        renderSettings();
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally { e.target.disabled = false; }
+    };
+  }
 
   function drawFields(p) {
     const box = document.getElementById('provfields');
