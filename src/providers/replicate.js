@@ -10,6 +10,24 @@ module.exports = {
   docs: 'https://replicate.com/docs/reference/http',
   blurb: 'Replicate uzerindeki her modeli calistirabilir. Referans gorseli data URI olarak gonderebildigi icin yuz kilidi burada calisir.',
   supportsReference: true,
+  // Referans GERCEKTEN gonderilir, ama yalnizca "Referans gorsel alani"
+  // doldurulmussa. Bos birakilirsa istek referanssiz gider ve BASARILI doner -
+  // kullanici yuz kilidini actigini sanir. Bu yuzden 'needs-config'.
+  referenceMode: 'needs-config',
+  referenceReady: (config) => !!String((config && config.referenceField) || '').trim(),
+  referenceNotReadyReason: 'Modelin referans girdisinin adi girilmemis, bu yuzden referans kare GONDERILMIYOR - yuz her karede kayar.',
+  referenceFixHint: 'Ayarlar > Replicate > "Referans gorsel alani" kutusuna modelin girdi adini yaz (ornek: image, redux_image, ip_adapter_image). Model sayfasindaki API sekmesinde yazar.',
+  cost: 'kredili',
+  costNote: 'Saniye basina faturalanir, model secimine gore degisir.',
+  pricingUrl: 'https://replicate.com/pricing',
+  realism: 'yuksek',
+  realismNote: 'FLUX ve SDXL ailesinin tamami calisir; fotogerceklik icin listedeki en guclu bulut secenegi.',
+  maxResolution: 'modele gore degisir',
+  resolutionNote: 'Serbest olcu kabul eder (16\'nin kati).',
+  setup: 'anahtar + model adi',
+  setupNote: 'Yuz kilidi icin ayrica referans alan adi gerekir.',
+  supportsSeed: true,
+  supportsNegative: true,
   needs: 'API anahtari (model adi hazir geliyor)',
   keyUrl: 'https://replicate.com/account/api-tokens',
   fields: [
@@ -35,6 +53,62 @@ module.exports = {
       help: 'Modelin girdi adi (ornek: image, redux_image, ip_adapter_image). Bos birakirsan referans gonderilmez.',
     },
   ],
+
+  /**
+   * Modelin GERCEK girdi semasindan referans gorsel alani adaylarini bulur.
+   * Tahmin degil: Replicate'in kendi OpenAPI semasi okunur.
+   */
+  async discoverReferenceFields({ config }) {
+    if (!config.apiKey) throw new Error('Replicate API Token girilmemis.');
+    const model = (config.model || 'black-forest-labs/flux-dev').trim();
+    if (!/^[\w.-]+\/[\w.-]+$/.test(model)) {
+      throw new Error('Model "owner/name" formatinda olmali.');
+    }
+
+    const info = await fetchJson(`https://api.replicate.com/v1/models/${model}`, {
+      headers: { 'authorization': `Bearer ${config.apiKey}` },
+    }, 30000);
+
+    const props = (((info || {}).latest_version || {}).openapi_schema || {})
+      .components?.schemas?.Input?.properties || {};
+
+    const aday = [];
+    for (const [ad, tanim] of Object.entries(props)) {
+      if (!tanim || typeof tanim !== 'object') continue;
+      // Referans gorsel girdileri Replicate'te her zaman string + format:uri.
+      if (tanim.type === 'string' && tanim.format === 'uri') {
+        aday.push({ key: ad, title: tanim.title || ad, description: tanim.description || '' });
+      }
+    }
+    return aday;
+  },
+
+  /**
+   * Model adindan referans alani ONERISI. Yalnizca oneri - hicbir zaman
+   * kendiliginden uygulanmaz, kullanici "Kutuya yaz" derse input'a yazilir.
+   */
+  referenceGuess(model = '') {
+    const m = String(model).toLowerCase();
+    const tablo = [
+      { test: /redux/, key: 'redux_image', why: 'FLUX Redux modelleri referansi redux_image ile alir.' },
+      { test: /ip[-_]?adapter/, key: 'ip_adapter_image', why: 'IP-Adapter modelleri ip_adapter_image bekler.' },
+      { test: /instant[-_]?id/, key: 'image', why: 'InstantID yuz karesini image ile alir.' },
+      { test: /photomaker/, key: 'input_image', why: 'PhotoMaker input_image bekler.' },
+      { test: /flux.*(kontext|fill|depth|canny)/, key: 'input_image', why: 'FLUX kontrol modelleri input_image bekler.' },
+      { test: /sdxl|stable-diffusion/, key: 'image', why: 'SDXL img2img girdisi image adini kullanir.' },
+    ];
+    for (const satir of tablo) {
+      if (satir.test.test(m)) return { key: satir.key, why: satir.why, confidence: 'yuksek' };
+    }
+    if (/flux-(dev|schnell|pro)/.test(m)) {
+      return {
+        key: null,
+        why: 'Bu model saf text-to-image gorunuyor - referans girdisi olmayabilir. Redux veya IP-Adapter destekleyen bir modele gecmen gerekebilir.',
+        confidence: 'uyari',
+      };
+    }
+    return { key: 'image', why: 'En yaygin ad. "Modelin alanlarini bul" ile kesinlestirebilirsin.', confidence: 'dusuk' };
+  },
 
   async generate({ config, prompt, negative, seed, width, height, count = 1, referenceDataUri, engine }) {
     if (!config.apiKey) throw new Error('Replicate API Token girilmemis.');

@@ -147,7 +147,12 @@ Windows'ta `BASLAT.bat` dosyasına çift tıkla. macOS / Linux'ta:
 bash baslat.sh
 ```
 
-Panel: **http://localhost:4200** (port değiştirmek için `PORT=5000 node server.js`)
+Panel: **http://localhost:4200**
+
+> ⚠️ **Aynı klasörden ikinci bir panel açma.** İki sunucu süreci aynı `data/` klasörüne yazarsa
+> galeri kareleri kaybolur ve karakter dosyası bozulabilir. Otomasyon bunu artık engelliyor:
+> ikinci örnek başlamaz ve nedenini söyler. Port değiştirmek (`PORT=5000 node server.js`)
+> bu sorunun çözümü **değildir** — önce açık olanı kapat.
 
 ---
 
@@ -268,18 +273,35 @@ dokümanındaki adresi ve gövde şablonunu bir kez girmen gerekir.
 
 **Ayarlar → Görsel üretim sağlayıcısı**
 
-| Platform | Ne gerekiyor | Referans görsel | Fotoğraf gerçekçiliği |
-|---|---|---|---|
-| **Pollinations.ai** (varsayılan) | Hiçbir şey — ücretsiz, anahtarsız | ✗ | ✗ (`sana` modeli) |
-| Replicate / fal.ai / yerel SD | Anahtar veya GPU | ✓ | ✓ |
-| Leonardo.ai | API Key | ✗ (panelde elle) |
-| OpenAI (gpt-image / DALL·E 3) | API Key | ✗ |
-| Stability AI | API Key | ✗ |
-| **Replicate** | API Token + model adı | ✓ |
-| **fal.ai** | API Key + model yolu | ✓ |
-| **Yerel Stable Diffusion** (A1111/Forge) | `--api` ile açık WebUI | ✓ |
-| **Yerel ComfyUI** | Workflow JSON (API formatı) | ✓ |
-| **Özel API** | URL + başlıklar + gövde şablonu | ✓ |
+Panelde bu tablonun canlı hâli var (**Ayarlar → "Hangisini seçmeliyim?"**);
+oradaki "Referans görsel" sütunu **senin ayarına göre** hesaplanır.
+
+| Platform | Ücret | Fotoğraf gerçekçiliği | Referans görsel | Çözünürlük | Ne gerekiyor |
+|---|---|---|---|---|---|
+| **Pollinations.ai** (varsayılan) | Bedava | Düşük | ✗ | 686×858 | Hiçbir şey |
+| API yok — sadece prompt | — | Üretmez | ✗ | — | Hiçbir şey |
+| Leonardo.ai | Kredili | Orta | ✗ | Modele göre | API Key |
+| OpenAI (gpt-image / DALL·E 3) | Kredili | Orta | ✗ | 1024×1792 | API Key |
+| Stability AI | Kredili | Orta | ✗ | 1536×1536 | API Key |
+| **Replicate** | Kredili | Yüksek | ⚙ | Modele göre | API Token + model + referans alanı |
+| **fal.ai** | Kredili | Yüksek | ⚙ | Modele göre | API Key + model yolu + referans alanı |
+| **Yerel Stable Diffusion** (A1111/Forge) | Yerel | Yüksek | ✓ | Donanımın kadar | `--api` ile açık WebUI |
+| **Yerel ComfyUI** | Yerel | Yüksek | ⚙ | Donanımın kadar | Workflow JSON + `{{reference}}` |
+| **Özel API** | Değişir | Değişir | ⚙ | Değişir | URL + başlıklar + gövde şablonu |
+
+**✓** doğuştan hazır · **⚙** destekliyor ama **ek ayar** gerekiyor · **✗** kabul etmiyor
+
+⚙ olanlarda ayarı yapmazsan referans kare **gönderilmez** ve istek yine de başarılı döner —
+yani yüz kilidini açtığını sanırsın. Panel artık bu durumu kırmızı uyarıyla söylüyor:
+
+- **Replicate / fal.ai** → "Referans görsel alanı" kutusuna modelin girdi adını yaz
+  (`redux_image`, `ip_adapter_image`, `image_url`…). Replicate'te **"Modelin alanlarını bul"**
+  butonu modelin kendi şemasını okuyup adayları listeler.
+  ⚠️ Varsayılan `flux-dev` / `fal-ai/flux/dev` **saf metin-den-görsel**; referans girdisi yoktur,
+  redux veya IP-Adapter destekleyen bir modele geçmen gerekir.
+- **Yerel ComfyUI** → workflow'una bir `LoadImage` düğümü ekleyip `image` değerini `{{reference}}` yap.
+  Otomasyon vesikalık karesini ComfyUI'ye yükler (`/upload/image`) ve adını oraya yazar.
+- **Özel API** → gövde şablonunda `{{reference}}` kullan.
 
 ### "Özel API" nasıl kullanılır?
 
@@ -366,7 +388,8 @@ Yeni platform eklemek: `src/providers/` içine bir dosya koy, `src/providers/ind
 - **18+ zorunlu.** Sihirbaz 18 yaşından küçük karakter oluşturmayı kabul etmez.
 - **Gerçek kişi taklidi yok.** Var olan bir insanın adını, yüzünü veya kimliğini taklit eden karakter üretme.
 - **AI olduğunu belirt.** Instagram ve diğer platformlar yapay zekâ üretimi içerik için etiketleme istiyor;
-  biyografiye de "AI" ibaresi koy.
+  biyografiye de "AI" ibaresi koy. Gönderi metni motoru bu satırı **varsayılan olarak** metne ekler;
+  kapatabilirsin ama o zaman biyografide veya platformun kendi "AI üretimi" anahtarında belirtmen gerekir.
 - **Anahtarların sende kalır.** `data/providers.json` sadece kendi bilgisayarındadır ve `.gitignore`'dadır.
   Bu yazılımın kendi sunucusu yoktur.
 - Platform API'leri değişebilir; bir entegrasyon bozulursa ilgili tek dosyayı düzelt.

@@ -19,9 +19,22 @@ module.exports = {
   docs: 'https://github.com/pollinations/pollinations/blob/master/APIDOCS.md',
   blurb: 'Ucretsiz ve API anahtari istemez - kurulumdan hemen sonra calisir. AMA: su an yalnizca "sana" modelini sunuyor. SANA hiz icin damitilmis bir model; cilt gozenegi, ince tuy ve gercek deri dokusu uretemez. Kompozisyon/mekan/poz denemek icin iyidir, FOTOGRAF GERCEKCILIGI icin yetersizdir. Ultra gercekci sonuc istiyorsan Replicate, fal.ai veya yerel Stable Diffusion bagla.',
   supportsReference: false,
+  // --- referans gorsel (tek dogruluk kaynagi: providers/index.js referenceState) ---
+  referenceMode: 'none',
+  // --- karsilastirma tablosu alanlari ---
+  cost: 'bedava',
+  costNote: 'Anahtar istemez, kredi saymaz, sinir yok.',
+  pricingUrl: null,
+  realism: 'dusuk',
+  realismNote: 'Su an yalnizca damitilmis "sana" modelini sunuyor; cilt gozenegi ve deri dokusu uretemez. Bu prompt ile duzelmez, modelin sinirdir.',
+  maxResolution: '686x858',
+  resolutionNote: 'Istenen olcuyu YOK SAYIYOR - 3072 istesen de 686x858 donuyor. Instagram 1080 istedigi icin buyutme sart.',
+  setup: 'yok',
+  setupNote: 'Kutudan cikar cikmaz calisir.',
+  supportsSeed: true,
+  supportsNegative: false,
   needs: 'Hicbir sey - ucretsiz, anahtar istemez',
   keyUrl: null,
-  photoreal: false,
   fields: [
     {
       key: 'model',

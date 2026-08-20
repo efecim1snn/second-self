@@ -14,6 +14,20 @@ module.exports = {
   docs: 'https://github.com/AUTOMATIC1111/stable-diffusion-webui/wiki/API',
   blurb: 'Kendi bilgisayarinda calisir: sifir maliyet, sinirsiz uretim. Referans gorsel varsa img2img ile yuz kilidi uygulanir.',
   supportsReference: true,
+  // Listedeki TEK "dogustan hazir" referans destegi: server referans karesini
+  // gonderdiginde img2img ucuna gecip init_images'e koyuyor, ek ayar gerekmiyor.
+  referenceMode: 'auto',
+  cost: 'yerel',
+  costNote: 'Kendi bilgisayarinda calisir - sifir maliyet, sinirsiz uretim.',
+  pricingUrl: null,
+  realism: 'yuksek',
+  realismNote: 'Kullandigin modele bagli; fotogercek checkpoint ile bulut seceneklerini yakalar.',
+  maxResolution: 'donaniminla sinirli',
+  resolutionNote: 'VRAM ne kadarsa o kadar.',
+  setup: 'kurulum gerekir',
+  setupNote: 'WebUI --api bayragiyla acik olmali.',
+  supportsSeed: true,
+  supportsNegative: true,
   needs: 'Bilgisayarinda acik WebUI (--api bayragiyla)',
   keyUrl: null,
   fields: [

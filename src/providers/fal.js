@@ -10,6 +10,24 @@ module.exports = {
   docs: 'https://docs.fal.ai/model-apis/quickstart',
   blurb: 'Hizli ve senkron calisir. FLUX ailesi icin en pratik secenek.',
   supportsReference: true,
+  // Replicate ile ayni durum: referans alani bos ise sessizce gonderilmiyor.
+  // Ustelik varsayilan model (fal-ai/flux/dev) saf text-to-image, referans
+  // girdisi hic yok - varsayilan kurulumda yuz kilidi CALISMAZ.
+  referenceMode: 'needs-config',
+  referenceReady: (config) => !!String((config && config.referenceField) || '').trim(),
+  referenceNotReadyReason: 'Modelin referans girdisinin adi girilmemis, bu yuzden referans kare GONDERILMIYOR - yuz her karede kayar.',
+  referenceFixHint: 'Ayarlar > fal.ai > "Referans gorsel alani" kutusuna modelin girdi adini yaz (cogunlukla image_url). Varsayilan fal-ai/flux/dev referans KABUL ETMEZ; redux veya ip-adapter destekleyen bir model yolu sec.',
+  cost: 'kredili',
+  costNote: 'Istek basina faturalanir.',
+  pricingUrl: 'https://fal.ai/pricing',
+  realism: 'yuksek',
+  realismNote: 'FLUX ailesi icin hizli ve senkron calisir.',
+  maxResolution: 'modele gore degisir',
+  resolutionNote: 'Serbest olcu kabul eder.',
+  setup: 'anahtar + model yolu',
+  setupNote: 'Yuz kilidi icin referans destekleyen bir model + alan adi gerekir.',
+  supportsSeed: true,
+  supportsNegative: true,
   needs: 'API anahtari (model yolu hazir geliyor)',
   keyUrl: 'https://fal.ai/dashboard/keys',
   fields: [
@@ -35,6 +53,25 @@ module.exports = {
       help: 'Modelin girdi adi (ornek: image_url). Bos ise referans gonderilmez.',
     },
   ],
+
+  /**
+   * Model yolundan referans alani ONERISI. fal'in sema ucu guvenilir
+   * olmadigi icin burada kesif yok, yalnizca oneri var.
+   */
+  referenceGuess(model = '') {
+    const m = String(model).toLowerCase();
+    if (/redux/.test(m)) return { key: 'image_url', why: 'FLUX Redux referansi image_url ile alir.', confidence: 'yuksek' };
+    if (/ip[-_]?adapter|instant/.test(m)) return { key: 'image_url', why: 'IP-Adapter / InstantID modelleri image_url bekler.', confidence: 'yuksek' };
+    if (/image[-_]?to[-_]?image|img2img|kontext/.test(m)) return { key: 'image_url', why: 'Gorsel-den-gorsel uclari image_url kullanir.', confidence: 'yuksek' };
+    if (/flux\/(dev|schnell)|flux-pro/.test(m)) {
+      return {
+        key: null,
+        why: 'Bu model saf text-to-image - referans girdisi YOK. Yuz kilidi icin redux veya ip-adapter destekleyen bir model yolu sec.',
+        confidence: 'uyari',
+      };
+    }
+    return { key: 'image_url', why: 'fal.ai\'de en yaygin ad. Model sayfasindaki API ornegiyle dogrula.', confidence: 'dusuk' };
+  },
 
   async generate({ config, prompt, negative, seed, width, height, count = 1, referenceDataUri, engine }) {
     if (!config.apiKey) throw new Error('fal.ai API Key girilmemis.');

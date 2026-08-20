@@ -12,6 +12,27 @@ const crypto = require('crypto');
 const traits = require('./traits');
 const life = require('./life');
 
+/**
+ * YUZ GEOMETRISI ALANLARI
+ *
+ * Hepsi opsiyonel. Bos birakilan alan prompt'a HIC girmez ve seed'i
+ * degistirmez - yani bu alanlar eklenmeden once yaratilmis karakterler
+ * birebir ayni sekilde uretmeye devam eder.
+ *
+ * NOT_SET listenin ILK secenegi olmak zorunda: panel bos <option> uretmiyor,
+ * ilk secenek varsayilan secili geliyor ve form onu gonderiyor. Ilk secenek
+ * gercek bir deger olsaydi, eski karakterini kaydeden kullanici farkinda
+ * olmadan yuz atar ve seed'ini kirardi.
+ */
+const NOT_SET = 'Belirtmeyecegim';
+const FACE_KEYS = [
+  'faceShape', 'jawline', 'cheekbones', 'forehead',
+  'eyeShape', 'eyeSet', 'browShape',
+  'noseBridge', 'noseTip',
+  'lipFullness', 'philtrum',
+  'ears', 'skinTexture',
+];
+
 const QUESTIONS = [
   {
     key: 'gender',
@@ -148,6 +169,117 @@ const QUESTIONS = [
     options: traits.options(),
     meta: traits.meta(),
     riskWarning: 'Yuksek riskli bir ozellik sectin. Bu ozellik her uretimde birebir ayni cikmayacak; karakter kartinda ve uretim ekraninda bu uyariyi tekrar goreceksin.',
+  },
+  {
+    key: 'faceShape',
+    label: 'Yuz sekli',
+    hint: 'Buradan asagisi YUZ GEOMETRISI. Hepsi opsiyonel - bosta birakabilirsin. Ama ucretsiz katmanda (referans gorsel kabul etmeyen platformlarda) yuzu tutan TEK sey metindir; ne kadar doldurursan acilar arasinda o kadar az kayar.',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Oval', 'Yuvarlak', 'Kare', 'Dikdortgen / uzun', 'Kalp', 'Elmas', 'Ucgen', 'Armut'],
+  },
+  {
+    key: 'jawline',
+    label: 'Cene hatti',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Keskin ve belirgin', 'Yumusak ve yuvarlak', 'Kare ve genis', 'Sivri / dar', 'Cukur cene', 'Ileri cikik cene', 'Geri cekik cene'],
+  },
+  {
+    key: 'cheekbones',
+    label: 'Elmacik kemigi',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Cok belirgin / yuksek', 'Belirgin', 'Orta', 'Duz / az belirgin', 'Dolgun yanaklar', 'Cokuk yanaklar'],
+  },
+  {
+    key: 'forehead',
+    label: 'Alin',
+    hint: 'Ince detay: genis kadrajli karelerde (tam boy gibi) prompt\'a girmez, yuz zaten birkac piksel olur.',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Genis ve yuksek', 'Genis', 'Orta', 'Dar', 'Alcak', 'Hafif cikik'],
+  },
+  {
+    key: 'eyeShape',
+    label: 'Goz sekli',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Badem', 'Yuvarlak / iri', 'Capakli / hooded', 'Monolid', 'Cekik / yukari kalkik', 'Asagi egimli', 'Dar / cizgi', 'Belirgin cift kapak'],
+  },
+  {
+    key: 'eyeSet',
+    label: 'Goz araligi ve derinligi',
+    hint: 'Ince detay: genis kadrajda prompt\'a girmez.',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Genis aralikli', 'Dar aralikli', 'Ortalama aralikli', 'Derin yerlesik', 'Cikik / one yerlesik'],
+  },
+  {
+    key: 'browShape',
+    label: 'Kas sekli',
+    hint: 'DIKKAT: "Ayirt edici ozellikler" listesinde "Belirgin kaslar" secildiyse ikisi celisebilir. Birini sec.',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Duz ve kalin', 'Duz ve ince', 'Kemerli ve kalin', 'Kemerli ve ince', 'Yumusak kavisli', 'Keskin acili', 'Dogal / bakimsiz', 'Birlesige yakin'],
+  },
+  {
+    key: 'noseBridge',
+    label: 'Burun koprusu',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Duz ve ince', 'Duz ve genis', 'Yuksek / belirgin', 'Alcak / duz', 'Kemerli (Roma)', 'Cukur (kavisli)'],
+  },
+  {
+    key: 'noseTip',
+    label: 'Burun ucu',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Sivri', 'Yuvarlak', 'Genis / etli', 'Yukari kalkik', 'Asagi donuk', 'Bolunmus'],
+  },
+  {
+    key: 'lipFullness',
+    label: 'Dudak dolgunlugu ve agiz',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Cok dolgun', 'Dolgun', 'Orta', 'Ince', 'Ust dudak ince', 'Alt dudak dolgun', 'Genis agiz', 'Kucuk agiz'],
+  },
+  {
+    key: 'philtrum',
+    label: 'Filtrum (burun-dudak olugu)',
+    hint: 'Ince detay: genis kadrajda prompt\'a girmez.',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Belirgin ve derin', 'Hafif', 'Uzun', 'Kisa', 'Belirgin kirik yay'],
+  },
+  {
+    key: 'ears',
+    label: 'Kulaklar',
+    hint: 'Ince detay: genis kadrajda prompt\'a girmez.',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Kucuk ve yatik', 'Orta', 'Buyuk', 'Kepce / disari acik', 'Sivri ust kenar', 'Yapisik memecik', 'Serbest memecik'],
+  },
+  {
+    key: 'skinTexture',
+    label: 'Ten dokusu',
+    hint: 'Gercekcilik icin en etkili alanlardan biri: "gozenekli" yazmak modeli plastik cilt refleksinden ceker.',
+    type: 'select',
+    required: false,
+    section: 'Yuz',
+    options: [NOT_SET, 'Belirgin gozenekli', 'Normal gozenekli', 'Ince dokulu', 'Kuru / mat', 'Yagli / parlak', 'Ifade cizgileri belirgin', 'Gunes gormus'],
   },
   {
     key: 'zodiac',
@@ -392,11 +524,19 @@ function validate(answers) {
  * Ayni kimlik -> ayni seed -> ayni yuz (seed destekleyen modellerde).
  */
 function deriveSeed(identity) {
-  const basis = JSON.stringify([
+  // ESKI 11 ELEMANLI DIZI AYNEN KORUNUR. Yuz alanlari yalnizca EN AZ BIRI
+  // doluysa dizinin sonuna tek bir parmak izi olarak eklenir; boylece yuz
+  // secmemis mevcut karakterlerin seed'i degismez.
+  const legacy = [
     identity.gender, identity.region, identity.ethnicity, identity.skinTone,
     identity.eyeColor, identity.hairColor, identity.hairStyle, identity.age,
     identity.bodyType, identity.distinctive, identity.name,
-  ]);
+  ];
+  const face = FACE_KEYS
+    .map((k) => (identity[k] && identity[k] !== NOT_SET ? `${k}=${identity[k]}` : ''))
+    .filter(Boolean)
+    .join('|');
+  const basis = JSON.stringify(face ? [...legacy, face] : legacy);
   const hash = crypto.createHash('sha256').update(basis).digest();
   // 32-bit pozitif tamsayi (cogu difuzyon modelinin kabul ettigi aralik)
   return hash.readUInt32BE(0) % 2147483647;
@@ -417,6 +557,8 @@ function extractLife(clean) {
 
 module.exports = {
   QUESTIONS,
+  FACE_KEYS,
+  NOT_SET,
   ALL_QUESTIONS,
   IDENTITY_QUESTIONS,
   LIFE_KEYS,

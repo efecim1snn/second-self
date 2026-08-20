@@ -175,6 +175,23 @@ button.tiny { padding: 5px 10px; font-size: 11.5px; }
 .notice.info { background: rgba(124,92,255,.07); border-color: rgba(124,92,255,.35); color: #d3c9ff; }
 .notice.bad { background: rgba(255,77,109,.08); border-color: rgba(255,77,109,.4); color: #ffb3c1; }
 .notice b { color: #fff; }
+.notice.ok { background: rgba(64,214,142,.07); border-color: rgba(64,214,142,.35); color: #a9f0c8; }
+
+/* Referans alani onerisi (Ayarlar > Replicate / fal) */
+.guessbox {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(124,92,255,.3);
+  border-radius: 10px;
+  background: rgba(124,92,255,.06);
+  font-size: 13px;
+}
+.guessbox.warnbox {
+  border-color: rgba(255,179,64,.35);
+  background: rgba(255,179,64,.06);
+}
+.guessbox .help { margin: 4px 0 0; }
+.bad-help { color: #ffb3c1; }
 
 /* ----------------------------------------------------------------- toasts */
 
@@ -331,4 +348,106 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 20px 0; }
 @media (max-width: 820px) {
   .studiobar { order: 1; width: 100%; flex-wrap: nowrap; overflow-x: auto; }
   .studiobar button { flex: 0 0 auto; }
+}
+
+/* ------------------------------------------------------- galeri eylemleri */
+.shot .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+button.tiny, a.tiny {
+  font-size: 12px;
+  padding: 5px 9px;
+}
+a.ghost {
+  display: inline-block;
+  text-decoration: none;
+}
+button.ghost.danger, a.ghost.danger { color: #ffb3c1; border-color: rgba(255,77,109,.35); }
+button.ghost.danger:hover { background: rgba(255,77,109,.1); }
+
+.modalbox.wide { max-width: min(1100px, 94vw); }
+#modalbody img.full {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+}
+
+/* -------------------------------------------------- saglayici karsilastirma */
+.cmp {
+  margin: 0 0 18px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+  background: rgba(255,255,255,.02);
+}
+.cmp > summary {
+  cursor: pointer;
+  padding: 12px 14px;
+  font-weight: 600;
+  color: #d3c9ff;
+  list-style: none;
+}
+.cmp > summary::-webkit-details-marker { display: none; }
+.cmp > summary::before { content: '▸ '; }
+.cmp[open] > summary::before { content: '▾ '; }
+.cmpwrap { overflow-x: auto; padding: 0 14px; }
+.cmptable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cmptable th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.12);
+  color: #9d96b8;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cmptable td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  vertical-align: top;
+}
+.cmptable tr.aktif > td { background: rgba(124,92,255,.08); }
+.cmptable tr.notsatiri > td { padding-top: 0; border-bottom: 1px solid rgba(255,255,255,.08); }
+.cmptable .rozetler { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cmp > .help { padding: 0 14px 14px; }
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid rgba(255,255,255,.15);
+  color: #c9c4de;
+  white-space: nowrap;
+}
+.tag.iyi { background: rgba(64,214,142,.12); border-color: rgba(64,214,142,.35); color: #a9f0c8; }
+.tag.orta { background: rgba(255,179,64,.12); border-color: rgba(255,179,64,.35); color: #ffd9a0; }
+.tag.kotu { background: rgba(255,77,109,.12); border-color: rgba(255,77,109,.35); color: #ffb3c1; }
+
+/* Dar ekranda tabloyu karta cevir - yatay kaydirma yerine okunur satirlar. */
+@media (max-width: 560px) {
+  .cmptable thead { display: none; }
+  .cmptable, .cmptable tbody, .cmptable tr, .cmptable td { display: block; width: 100%; }
+  .cmptable tr {
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    padding: 6px 0;
+  }
+  .cmptable tr.notsatiri { border: 0; margin-top: -8px; margin-bottom: 12px; }
+  .cmptable td { border: 0; padding: 6px 12px; }
+  .cmptable td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 11px;
+    color: #9d96b8;
+    margin-bottom: 2px;
+  }
+  .cmptable tr.notsatiri td::before { content: none; }
 }

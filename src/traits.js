@@ -53,7 +53,11 @@ const DISTINCTIVE = [
     value: 'Belirgin kaslar',
     en: 'strong, well-defined eyebrows',
     risk: 'dusuk',
-    note: 'Kararli calisir; kimligi guclendiren guvenli bir secim.',
+    // NOT: "Kas sekli" yuz sorusuyla ayni seyi tarif ediyor. Ikisi birden
+    // secilirse prompt'ta celisen iki kas tarifi olur. Secenek BILEREK
+    // silinmedi - silmek onu daha once secmis karakterlerden ozelligi
+    // sessizce dusururdu. Uyari browShape sorusunun hint'inde duruyor.
+    note: 'Kararli calisir; kimligi guclendiren guvenli bir secim. Yuz bolumundeki "Kas sekli" sorusuyla cakisir - ikisinden birini kullan.',
   },
   {
     value: 'Gamze',

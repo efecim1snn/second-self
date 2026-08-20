@@ -343,6 +343,175 @@ function distinctiveList(identity) {
  *   facialOnly=true -> sadece kadrajda gorunebilen ozellikler (bilek dovmesi
  *                      vesikalikta gorunmez; birakilirsa model uydurur)
  */
+/* ------------------------------------------------------ yuz geometrisi */
+
+/**
+ * YUZ GEOMETRISI SOZLUKLERI
+ *
+ * Neden var: ucretsiz katmanda (referans gorsel kabul etmeyen platformlarda)
+ * kimligi tutan TEK arac metindir. Eskiden physicalCore yalnizca ten/goz/sac
+ * yaziyordu - yani model yuzun kemik yapisini her karede kendi uyduruyordu.
+ * Ayni seed ayni yuzu getiriyordu ama poz degisince yuz kayiyordu.
+ *
+ * Kurallar:
+ * - Ilk anahtar her zaman NOT_SET ('Belirtmeyecegim') ve '' doner.
+ * - `|| identity.x` YEDEGI YOK. Bilinmeyen deger bos donmeli; aksi halde
+ *   Turkce etiket ("Kalp yuz") oldugu gibi Ingilizce prompt'a sizar.
+ * - NEGATIVE listesiyle catisan kelime yok: 'asymmetrical', 'smooth',
+ *   'flawless', 'poreless' bilerek kullanilmadi.
+ * - Hicbiri sayisal olcu icermez (guvenlik filtresi tetikliyor).
+ */
+
+const FACE_SHAPE = {
+  'Oval': 'an oval face',
+  'Yuvarlak': 'a round face',
+  'Kare': 'a square face',
+  'Dikdortgen / uzun': 'a long rectangular face',
+  'Kalp': 'a heart-shaped face',
+  'Elmas': 'a diamond-shaped face',
+  'Ucgen': 'a triangular face with a wider jaw than forehead',
+  'Armut': 'a pear-shaped face',
+};
+
+const JAWLINE = {
+  'Keskin ve belirgin': 'a sharply defined jawline',
+  'Yumusak ve yuvarlak': 'a soft rounded jawline',
+  'Kare ve genis': 'a broad square jaw',
+  'Sivri / dar': 'a narrow tapered jaw',
+  'Cukur cene': 'a chin with a dimple in the middle',
+  'Ileri cikik cene': 'a forward-set chin',
+  'Geri cekik cene': 'a gently receding chin',
+};
+
+const CHEEKBONES = {
+  'Cok belirgin / yuksek': 'high prominent cheekbones',
+  'Belirgin': 'defined cheekbones',
+  'Orta': 'moderately defined cheekbones',
+  'Duz / az belirgin': 'low flat cheekbones',
+  'Dolgun yanaklar': 'full rounded cheeks',
+  'Cokuk yanaklar': 'hollow cheeks beneath the cheekbones',
+};
+
+const FOREHEAD = {
+  'Genis ve yuksek': 'a wide high forehead',
+  'Genis': 'a wide forehead',
+  'Orta': 'a forehead of average height',
+  'Dar': 'a narrow forehead',
+  'Alcak': 'a low forehead with the hairline sitting close to the brows',
+  'Hafif cikik': 'a slightly rounded forehead',
+};
+
+const EYE_SHAPE = {
+  'Badem': 'almond-shaped eyes',
+  'Yuvarlak / iri': 'large round eyes',
+  'Capakli / hooded': 'hooded eyes with the lid crease partly covered',
+  'Monolid': 'monolid eyes without a visible crease',
+  'Cekik / yukari kalkik': 'upturned eyes lifting at the outer corners',
+  'Asagi egimli': 'downturned eyes sloping at the outer corners',
+  'Dar / cizgi': 'narrow eyes with a slim opening',
+  'Belirgin cift kapak': 'eyes with a deep double eyelid crease',
+};
+
+const EYE_SET = {
+  'Genis aralikli': 'wide-set eyes',
+  'Dar aralikli': 'close-set eyes',
+  'Ortalama aralikli': 'evenly spaced eyes',
+  'Derin yerlesik': 'deep-set eyes',
+  'Cikik / one yerlesik': 'prominent forward-set eyes',
+};
+
+const BROW_SHAPE = {
+  'Duz ve kalin': 'straight thick eyebrows',
+  'Duz ve ince': 'straight thin eyebrows',
+  'Kemerli ve kalin': 'thick arched eyebrows',
+  'Kemerli ve ince': 'thin arched eyebrows',
+  'Yumusak kavisli': 'softly curved eyebrows',
+  'Keskin acili': 'sharply angled eyebrows',
+  'Dogal / bakimsiz': 'natural untrimmed eyebrows',
+  'Birlesige yakin': 'eyebrows set close together above the nose',
+};
+
+const NOSE_BRIDGE = {
+  'Duz ve ince': 'a straight narrow nose bridge',
+  'Duz ve genis': 'a straight broad nose bridge',
+  'Yuksek / belirgin': 'a high prominent nose bridge',
+  'Alcak / duz': 'a low flat nose bridge',
+  'Kemerli (Roma)': 'a nose with a convex Roman arch',
+  'Cukur (kavisli)': 'a nose with a gently concave bridge',
+};
+
+const NOSE_TIP = {
+  'Sivri': 'a pointed nose tip',
+  'Yuvarlak': 'a rounded nose tip',
+  'Genis / etli': 'a broad fleshy nose tip',
+  'Yukari kalkik': 'an upturned nose tip',
+  'Asagi donuk': 'a downturned nose tip',
+  'Bolunmus': 'a nose tip with a slight cleft',
+};
+
+const LIP_FULLNESS = {
+  'Cok dolgun': 'very full lips',
+  'Dolgun': 'full lips',
+  'Orta': 'lips of average fullness',
+  'Ince': 'thin lips',
+  'Ust dudak ince': 'a thin upper lip with a fuller lower lip',
+  'Alt dudak dolgun': 'a noticeably fuller lower lip',
+  'Genis agiz': 'a wide mouth',
+  'Kucuk agiz': 'a small mouth',
+};
+
+const PHILTRUM = {
+  'Belirgin ve derin': 'a deep well-defined philtrum groove above the lip',
+  'Hafif': 'a shallow philtrum',
+  'Uzun': 'a long philtrum between nose and lip',
+  'Kisa': 'a short philtrum',
+  'Belirgin kirik yay': 'a sharply drawn cupid\'s bow',
+};
+
+const EARS = {
+  'Kucuk ve yatik': 'small ears held close to the head',
+  'Orta': 'ears of average size',
+  'Buyuk': 'large ears',
+  'Kepce / disari acik': 'ears that stand out from the head',
+  'Sivri ust kenar': 'ears with a slightly pointed upper edge',
+  'Yapisik memecik': 'ears with attached lobes',
+  'Serbest memecik': 'ears with free-hanging lobes',
+};
+
+const SKIN_TEXTURE = {
+  'Belirgin gozenekli': 'visibly porous skin texture',
+  'Normal gozenekli': 'natural skin texture with visible pores',
+  'Ince dokulu': 'fine-grained skin texture',
+  'Kuru / mat': 'matte dry-looking skin',
+  'Yagli / parlak': 'skin with a natural sheen across the t-zone',
+  'Ifade cizgileri belirgin': 'skin with visible expression lines',
+  'Gunes gormus': 'weathered sun-exposed skin',
+};
+
+/** anahtar -> sozluk. wizard.FACE_KEYS ile ayni anahtarlar. */
+const FACE_DICT = {
+  faceShape: FACE_SHAPE,
+  jawline: JAWLINE,
+  cheekbones: CHEEKBONES,
+  forehead: FOREHEAD,
+  eyeShape: EYE_SHAPE,
+  eyeSet: EYE_SET,
+  browShape: BROW_SHAPE,
+  noseBridge: NOSE_BRIDGE,
+  noseTip: NOSE_TIP,
+  lipFullness: LIP_FULLNESS,
+  philtrum: PHILTRUM,
+  ears: EARS,
+  skinTexture: SKIN_TEXTURE,
+};
+
+/**
+ * Genis kadrajda dusurulen INCE detaylar.
+ * Tam boy karede yuz latent uzayda ~11 piksele dusuyor; filtrum tarifi orada
+ * bilgi tasimaz, sadece prompt'u uzatip onemli kisimlari seyreltir.
+ */
+const FINE_FACE_KEYS = ['eyeSet', 'philtrum', 'ears', 'forehead', 'skinTexture'];
+
 function physicalCore(identity, options = {}) {
   const gender = GENDER[identity.gender] || 'person';
   const ethnicity = ETHNICITY[identity.ethnicity] || identity.ethnicity;
@@ -358,10 +527,34 @@ function physicalCore(identity, options = {}) {
   // listelerde olmayan hicbir sey elenmesin diye.
   const note = (identity.appearanceNote || '').trim();
 
+  // Yuz geometrisi. Secilmemis alan '' doner ve filter(Boolean) ile duser -
+  // yani bu alanlar eklenmeden once yaratilmis karakterlerde cumle
+  // BIREBIR AYNI kalir.
+  // faceDetail: 'full' (varsayilan) | 'core' (ince detaylar duser, genis kadraj)
+  //           | 'none' (yuz alanlari hic girmez - ayri cumlede verilecekse)
+  const ince = options.faceDetail === 'core';
+  const yuzYok = options.faceDetail === 'none';
+  const F = (key) => {
+    // 'none' yalnizca YUZ GEOMETRISINI susturur. skinTexture bir cilt
+    // ozelligi, yuz kemik yapisi degil - ayri cumleye tasinmaz, burada kalir.
+    if (yuzYok && key !== 'skinTexture') return '';
+    if (ince && FINE_FACE_KEYS.includes(key)) return '';
+    const dict = FACE_DICT[key];
+    const value = identity[key];
+    if (!dict || !value) return '';
+    return dict[value] || '';
+  };
+
   if (options.short) {
     return [
       `${identity.age}-year-old ${ethnicity} ${gender}`,
-      skin, eyes, hair, ...marks, note,
+      skin,
+      F('faceShape'), F('jawline'), F('cheekbones'),
+      eyes, F('eyeShape'), F('browShape'),
+      F('noseBridge'), F('lipFullness'),
+      hair,
+      F('skinTexture'),
+      ...marks, note,
     ].filter(Boolean).join(', ');
   }
 
@@ -385,11 +578,18 @@ function physicalCore(identity, options = {}) {
   // "Mediterranean coast heritage" gibi ifadelerdeki mekan kelimeleri
   // (coast, highlands) modeli sahneden kopararak plaja/dagliga cekiyordu.
   // Gorunusu zaten etnik koken tasiyor; bolge karakter verisinde duruyor.
+  // Goz RENGI ile goz GEOMETRISI bitisik duruyor: model iki ayri yerde
+  // gecen goz tarifini birlestirmekte zorlaniyor.
   const parts = [
     `${identity.age}-year-old ${ethnicity} ${gender}`,
     skin,
-    eyes,
+    F('faceShape'), F('jawline'), F('cheekbones'), F('forehead'),
+    eyes, F('eyeShape'), F('eyeSet'), F('browShape'),
+    F('noseBridge'), F('noseTip'),
+    F('lipFullness'), F('philtrum'),
+    F('ears'),
     hair,
+    F('skinTexture'),
     body,
     ...stature,
     ...marks,
@@ -398,6 +598,35 @@ function physicalCore(identity, options = {}) {
 
   return parts.filter(Boolean).join(', ');
 }
+
+/**
+ * physicalCore'un uc parcasi: kimlik girisi, yuz cumlesi, geri kalani.
+ * Dogal dil lehcelerinde (flux, dalle) yuzu AYRI BIR CUMLEYE almak icin.
+ * Tek uzun virgullu yigin yerine iki cumle, modelin yuz tarifini gormesini
+ * belirgin sekilde artiriyor.
+ */
+function physicalCoreSplit(identity, options = {}) {
+  // lead: yuz alanlari HIC girmeden uretilir (metin oyunuyla cikarmak yerine).
+  const lead = physicalCore(identity, { ...options, faceDetail: 'none' });
+
+  const ince = options.faceDetail === 'core';
+  const F = (key) => {
+    if (ince && FINE_FACE_KEYS.includes(key)) return '';
+    const dict = FACE_DICT[key];
+    const value = identity[key];
+    if (!dict || !value) return '';
+    return dict[value] || '';
+  };
+  const yuz = [
+    F('faceShape'), F('jawline'), F('cheekbones'), F('forehead'),
+    F('eyeShape'), F('eyeSet'), F('browShape'),
+    F('noseBridge'), F('noseTip'),
+    F('lipFullness'), F('philtrum'), F('ears'),
+  ].filter(Boolean);
+
+  return { lead, face: yuz.join(', '), rest: '' };
+}
+
 
 /** Vesikalik icin ek negatifler: sahne/aksesuar sizmasini engeller. */
 const REFERENCE_NEGATIVE = [
@@ -421,7 +650,13 @@ function negativeFor(identity, scene = {}) {
  * soylenir, kisi sonra gelir.
  */
 function buildReferencePrompt(identity, scene, dialect) {
-  const core = physicalCore(identity, { short: true, facialOnly: true });
+  // Vesikalikta budama YOK: kare zaten yuze odakli, ince detaylarin tam da
+  // ise yaradigi tek yer burasi.
+  // Yuz alanlari core'a GIRMEZ; hemen altta kendi cumlesinde tam haliyle
+  // veriliyor. Ikisini birden yazarsak ayni tarif iki kez gecer ve model
+  // celisen agirlik alir.
+  const core = physicalCore(identity, { short: true, facialOnly: true, faceDetail: 'none' });
+  const split = physicalCoreSplit(identity, { faceDetail: 'full' });
   const naturalLanguage = ['flux', 'dalle', 'leonardo', 'higgsfield', 'generic'].includes(dialect);
 
   if (naturalLanguage) {
@@ -430,6 +665,9 @@ function buildReferencePrompt(identity, scene, dialect) {
     return [
       'A studio passport identification photograph taken against a plain, seamless light grey background.',
       `The subject is a ${core}.`,
+      // "yukarida tarif edildigi gibi" satiri, yuz geometrisi yokken bos bir
+      // soze isaret ediyordu. Artik gercekten tarif edilen bir sey var.
+      split.face ? `They have ${split.face}.` : '',
       'Their hair length, hair style, eye colour and facial features must stay exactly as described above.',
       `${capitalise(scene.shot)}.`,
       `${capitalise(scene.pose)}.`,
@@ -447,6 +685,7 @@ function buildReferencePrompt(identity, scene, dialect) {
     'passport ID photograph', 'plain seamless light grey studio backdrop',
     scene.shot, scene.pose,
     core,
+    split.face,
     'plain white crew-neck t-shirt', 'flat even studio lighting', 'no shadows',
     '(RAW photo:1.3)', '(photorealistic:1.3)', SKIN_REAL, IMPERFECTION,
     'subsurface scattering', 'film grain', 'unretouched',
@@ -579,11 +818,13 @@ function sceneWords(scene) {
  */
 function build(character, scene = {}, dialect = 'generic') {
   const identity = character.identity;
-  const core = physicalCore(identity);
   const aspectKey = ASPECT[scene.aspect] ? scene.aspect : 'post';
   const aspectBase = ASPECT[aspectKey];
   // Genis kadrajda yuze daha cok piksel dusmesi icin cozunurluk buyutulur.
   const wide = isWideShot(scene) && scene.style !== 'reference';
+  // Genis kadrajda ince yuz detaylari dusuruluyor: yuz zaten birkac piksel,
+  // filtrum tarifi orada bilgi tasimadan prompt'u seyreltiyor.
+  const core = physicalCore(identity, { faceDetail: wide ? 'core' : 'full' });
   const aspect = { ...aspectBase, wh: wide ? aspectBase.wideWh : aspectBase.wh };
   // Vesikalik acilarinda seed kaydirilir (bkz. reference.sceneFor): ayni seed
   // ile model aci talimatini yok sayip ayni kareyi tekrar uretiyor.
@@ -678,9 +919,13 @@ function build(character, scene = {}, dialect = 'generic') {
     case 'flux': {
       // Once KADRAJ + MEKAN, sonra kisi, sonra eylem. Kisiyi anlatarak
       // baslarsan model bunu bir portre istegi sanip mekani gormezden gelir.
+      const fluxSplit = physicalCoreSplit(identity, { faceDetail: wide ? 'core' : 'full' });
       prompt = [
         `${capitalise(scene.shot || 'A candid photograph')}${scene.setting ? `, set in ${scene.setting}` : ''}.`,
-        `The subject is a ${core}.`,
+        `The subject is a ${fluxSplit.lead}.`,
+        // Yuz AYRI CUMLE: tek uzun virgullu yiginda model yuz tarifini
+        // gormezden geliyordu.
+        fluxSplit.face ? `They have ${fluxSplit.face}.` : '',
         [
           scene.pose ? `They are ${scene.pose}` : '',
           scene.outfit ? `wearing ${scene.outfit}` : '',
@@ -780,6 +1025,9 @@ module.exports = {
   build,
   buildAll,
   physicalCore,
+  physicalCoreSplit,
+  FACE_DICT,
+  FINE_FACE_KEYS,
   identityLine,
   DIALECTS,
   ASPECT,

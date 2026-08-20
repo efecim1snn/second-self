@@ -18,6 +18,22 @@ module.exports = {
   docs: null,
   blurb: 'Listede olmayan HER platform icin. Dokumanindaki adres, baslik ve govde sablonunu gir; otomasyon prompt\'u oraya gonderip donen gorseli kaydeder.',
   supportsReference: true,
+  // Govde sablonunda {{reference}} yazdiysan referans gonderilir.
+  referenceMode: 'needs-config',
+  referenceReady: (config) => /\{\{\s*reference\s*\}\}/.test(String((config && config.body) || '')),
+  referenceNotReadyReason: 'Govde sablonunda {{reference}} gecmiyor, bu yuzden referans kare gonderilmiyor.',
+  referenceFixHint: 'Govde sablonunda platformun referans alanina {{reference}} yaz. Ornek: "image": "{{reference}}"',
+  cost: 'degisir',
+  costNote: 'Bagladigin platforma bagli.',
+  pricingUrl: null,
+  realism: 'degisir',
+  realismNote: 'Bagladigin platforma bagli.',
+  maxResolution: 'degisir',
+  resolutionNote: '',
+  setup: 'ileri duzey',
+  setupNote: 'URL, baslik ve govde sablonu elle yazilir.',
+  supportsSeed: true,
+  supportsNegative: true,
   needs: 'Platformun uc nokta adresi + anahtari',
   keyUrl: null,
   fields: [
@@ -95,6 +111,15 @@ module.exports = {
   ],
 
   async generate({ config, prompt, negative, seed, width, height, aspectRatio, referenceDataUri }) {
+    // Sablon referans istiyor ama gonderilecek kare yoksa SESSIZCE bos string
+    // gonderme - istek "basarili" doner ve kullanici yuz kilidinin calistigini
+    // sanir. Acikca soyle.
+    if (/\{\{\s*reference\s*\}\}/.test(String(config.body || '')) && !referenceDataUri) {
+      throw new Error(
+        'Govde sablonun {{reference}} istiyor ama gonderilecek referans kare yok. ' +
+        'Once "Vesikalik seti" sekmesinden en az "Onden" karesini uret.'
+      );
+    }
     if (!config.url) throw new Error('Ozel API adresi girilmemis.');
 
     const vars = {
@@ -104,6 +129,9 @@ module.exports = {
       width: Number(width) || 832,
       height: Number(height) || 1216,
       aspect: aspectRatio || '4:5',
+      // Sablon {{reference}} istiyorsa ama referans yoksa BOS STRING GONDERME:
+      // cogu API bos string'e 400 doner ya da sessizce yok sayar, kullanici da
+      // yuz kilidinin calistigini sanir.
       reference: referenceDataUri || '',
     };
 

@@ -25,6 +25,7 @@ const scenes = require('./src/scenes');
 const reference = require('./src/reference');
 const brief = require('./src/brief');
 const welcome = require('./src/welcome');
+const caption = require('./src/caption');
 const providers = require('./src/providers');
 const upscalers = require('./src/upscalers');
 const studios = require('./src/studios');
@@ -164,9 +165,20 @@ function referencePayload(character, scene) {
   const buffer = store.readImageBuffer(filename);
   if (!buffer) return {};
   const b64 = buffer.toString('base64');
+
+  // Mime SABIT image/png DEGIL. store.saveImageBuffer jpg ve webp de
+  // kaydediyor (Pollinations jpeg donuyor); sabit png yazinca JPEG baytlari
+  // "bu bir png" etiketiyle bulut API'sine gidiyordu.
+  const ext = String(filename).split('.').pop().toLowerCase();
+  const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+    : ext === 'webp' ? 'image/webp'
+      : 'image/png';
+
   return {
-    referenceBase64: b64,
-    referenceDataUri: `data:image/png;base64,${b64}`,
+    referenceBuffer: buffer,   // ComfyUI dosyayi yukluyor, base64 gomemiyor
+    referenceMime: mime,
+    referenceBase64: b64,      // automatic1111 SAF base64 bekliyor, data URI degil
+    referenceDataUri: `data:${mime};base64,${b64}`,
     referenceFile: filename,
   };
 }
@@ -179,12 +191,20 @@ async function generateScene(character, scene, count = 1) {
   const { spec, config } = activeProvider();
   const dialect = config.dialect || spec.dialect;
 
-  // Vesikalikta aci basina seed kaydirmak SADECE referans gorsel kabul eden
-  // platformlarda dogru: orada kimligi referans tutar, seed sadece kompozisyonu
-  // degistirir. Referans kabul etmeyen bir modelde seed'i kaydirmak kimligi de
-  // degistirir - 8 aci yerine 8 farkli insan elde edersin. Bu yuzden orada
-  // seed sabit birakilir (en azindan tek bir tutarli yuz kalir).
-  const effectiveScene = (scene.seedOffset && !spec.supportsReference)
+  // GERCEK referans durumu. Eskiden burada `spec.supportsReference` bayragina
+  // bakiliyordu ve o bayrak YALAN SOYLUYORDU: ComfyUI "destekliyorum" diyip
+  // referansi hic kullanmiyordu, Replicate/fal ise alan adi girilmemisse
+  // sessizce referanssiz uretiyordu. Sonuc iki katmanli hasar:
+  //   1) yuz kilidi acik saniliyordu ama acik degildi,
+  //   2) asagidaki seed kaydirmasi yine de uygulaniyordu -> 8 aci = 8 ayri insan.
+  const refState = providers.referenceState(spec, config);
+  const refPayload = refState.state === 'ready' ? referencePayload(character, scene) : {};
+  const referenceLive = !!refPayload.referenceFile;
+
+  // Seed kaydirmasi SADECE referans gercekten gidiyorsa dogru: orada kimligi
+  // referans tutar, seed yalnizca kompozisyonu degistirir. Referans gitmiyorsa
+  // seed'i kaydirmak kimligi de degistirir.
+  const effectiveScene = (scene.seedOffset && !referenceLive)
     ? { ...scene, seedOffset: 0 }
     : scene;
 
@@ -218,7 +238,7 @@ async function generateScene(character, scene, count = 1) {
     // numarali sebebi buydu.
     engine: built.engine,
     params: built.params,
-    ...(spec.supportsReference ? referencePayload(character, effectiveScene) : {}),
+    ...refPayload,
   });
 
   // Buyutme adimi: uretilen kare, bagli buyutme aracina gonderilir.
@@ -271,7 +291,21 @@ async function generateScene(character, scene, count = 1) {
     saved.push(item);
   }
 
-  return { images: saved, built, spec, tookMs: Date.now() - started };
+  return {
+    images: saved,
+    built,
+    spec,
+    tookMs: Date.now() - started,
+    // Teshis: kare referansli mi uretildi, degilse NEDEN? Panel bunu
+    // sonucun ustunde gosteriyor - sessiz basarisizlik kalmasin.
+    reference: {
+      state: refState.state,
+      used: referenceLive,
+      file: refPayload.referenceFile || null,
+      reason: referenceLive ? null : (refState.reason || 'Gonderilecek vesikalik karesi yok.'),
+      fix: referenceLive ? null : refState.fix,
+    },
+  };
 }
 
 /* ------------------------------------------------------------------ rotalar */
@@ -279,17 +313,22 @@ async function generateScene(character, scene, count = 1) {
 const routes = {
   'GET /api/durum': async () => {
     const character = store.getCharacter();
-    const { cfg, spec } = activeProvider();
+    const { cfg, spec, config } = activeProvider();
+    const refState = providers.referenceState(spec, config);
     return {
       hasCharacter: !!character,
       character,
-      gallery: store.getGallery().slice(0, 60),
+      gallery: store.getGalleryPage(60),
       provider: {
         active: spec.id,
         label: spec.label,
         generates: spec.id !== 'manual',
         dialect: (cfg.entries && cfg.entries[spec.id] && cfg.entries[spec.id].dialect) || spec.dialect,
         supportsReference: !!spec.supportsReference,
+        // Gercek durum: 'none' | 'needs-config' | 'ready'
+        referenceState: refState.state,
+        referenceReason: refState.reason,
+        referenceFix: refState.fix,
       },
       identityLine: character ? promptcraft.identityLine(character.identity) : null,
       reference: character ? reference.status(character) : null,
@@ -382,6 +421,14 @@ const routes = {
       appearanceNote: clean.appearanceNote || '',
     };
 
+    // YUZ GEOMETRISI - yalnizca GERCEKTEN secilmis alanlar yazilir.
+    // Bos alani '' olarak yazarsak kimlik nesnesi degisir ve
+    // identityChanged karsilastirmasi sahte "vesikalik bayat" uyarisi verir.
+    for (const key of wizard.FACE_KEYS) {
+      const value = clean[key];
+      if (value && value !== wizard.NOT_SET) identity[key] = value;
+    }
+
     const lifeBlock = wizard.extractLife({ ...clean, name });
     const personaBlock = life.enrich(persona.build(clean, name), lifeBlock);
 
@@ -451,6 +498,14 @@ const routes = {
       appearanceNote: clean.appearanceNote || '',
     };
 
+    // YUZ GEOMETRISI - yalnizca GERCEKTEN secilmis alanlar yazilir.
+    // Bos alani '' olarak yazarsak kimlik nesnesi degisir ve
+    // identityChanged karsilastirmasi sahte "vesikalik bayat" uyarisi verir.
+    for (const key of wizard.FACE_KEYS) {
+      const value = clean[key];
+      if (value && value !== wizard.NOT_SET) identity[key] = value;
+    }
+
     const identityChanged = JSON.stringify(identity) !== JSON.stringify(existing.identity);
     const lifeBlock = wizard.extractLife({ ...clean, name });
     const personaBlock = life.enrich(persona.build(clean, name), lifeBlock);
@@ -491,9 +546,20 @@ const routes = {
     const character = store.getCharacter();
     if (!character) throw notFound('Once karakter yarat.');
     // Kimlik DEGISTIRILEMEZ. Sadece kisilik/metin katmani duzenlenebilir.
-    const editable = ['backstory', 'tone', 'signatureHook', 'contentPillars', 'wardrobe', 'settings', 'props'];
+    const editable = ['backstory', 'tone', 'signatureHook', 'contentPillars', 'wardrobe', 'settings', 'props', 'emojiStyle'];
     for (const key of editable) {
       if (key in (body || {})) character.persona[key] = body[key];
+    }
+
+    // Ses rehberi: yalnizca BILINEN alt anahtarlar yazilabilir.
+    // Keyfi anahtar kabul edersek karakter dosyasi cop kutusuna doner ve
+    // caption motoru beklemedigi bir sekille karsilasir.
+    if (body && body.voiceGuide && typeof body.voiceGuide === 'object') {
+      const izinli = ['register', 'sentenceLength', 'avoid', 'emojiRule', 'ctaStyle', 'openers'];
+      character.persona.voiceGuide = character.persona.voiceGuide || {};
+      for (const key of izinli) {
+        if (key in body.voiceGuide) character.persona.voiceGuide[key] = body.voiceGuide[key];
+      }
     }
     if (body && typeof body.publicReferenceUrl === 'string') {
       character.reference.publicUrl = body.publicReferenceUrl.trim();
@@ -501,6 +567,24 @@ const routes = {
     store.saveCharacter(character);
     return { character };
   },
+
+  /**
+   * GONDERI METNI URETIR.
+   *
+   * Bagli bir gorsel API'si GEREKMEZ: bu motor metin uretir, gorsel degil.
+   * Yerel, deterministik, sablon tabanli - harici LLM veya kredi kullanmaz.
+   */
+  'POST /api/metin': async (body) => {
+    const character = store.getCharacter();
+    if (!character) throw notFound('Once karakter yarat.');
+    return caption.build(character, body.scene || {}, {
+      platform: body.platform,
+      variants: body.variants,
+      aiLabel: body.aiLabel,
+    });
+  },
+
+  'GET /api/metin/platformlar': async () => ({ platforms: caption.platforms() }),
 
   'POST /api/sahneler': async (body) => {
     const character = store.getCharacter();
@@ -535,6 +619,7 @@ const routes = {
       provider: { id: out.spec.id, label: out.spec.label },
       tookMs: out.tookMs,
       referenceMissing: !reference.status(character).complete,
+      reference: out.reference,
     };
   },
 
@@ -556,26 +641,36 @@ const routes = {
     const image = out.images[0];
     if (!image) throw new Error('Vesikalik uretilemedi.');
 
-    const fresh = store.getCharacter();
-    fresh.referenceSet = fresh.referenceSet || {};
-    fresh.referenceSet[body.angle] = {
-      angle: body.angle,
-      filename: image.filename,
-      url: image.url,
-      createdAt: image.createdAt,
-      prompt: out.built.prompt,
-    };
-    // Ilk uretilen onden kare otomatik olarak birincil referans olur.
-    if (body.angle === reference.primaryKey() || !fresh.reference.filename) {
-      fresh.reference = {
+    // Oku-degistir-yaz tek kilit altinda: iki surec ayni anda vesikalik
+    // uretirse biri otekinin acisini silmesin.
+    const fresh = store.updateCharacter((cur) => {
+      if (!cur) return undefined;
+      cur.referenceSet = cur.referenceSet || {};
+      cur.referenceSet[body.angle] = {
+        angle: body.angle,
         filename: image.filename,
-        publicUrl: fresh.reference.publicUrl || '',
-        setAt: new Date().toISOString(),
+        url: image.url,
+        createdAt: image.createdAt,
+        prompt: out.built.prompt,
       };
-    }
-    store.saveCharacter(fresh);
+      // Ilk uretilen onden kare otomatik olarak birincil referans olur.
+      if (body.angle === reference.primaryKey() || !cur.reference.filename) {
+        cur.reference = {
+          filename: image.filename,
+          publicUrl: cur.reference.publicUrl || '',
+          setAt: new Date().toISOString(),
+        };
+      }
+      return cur;
+    });
 
-    return { angle: body.angle, image, status: reference.status(fresh), tookMs: out.tookMs };
+    return {
+      angle: body.angle,
+      image,
+      status: reference.status(fresh),
+      tookMs: out.tookMs,
+      reference: out.reference,
+    };
   },
 
   'POST /api/referans/promptlar': async () => {
@@ -655,12 +750,47 @@ const routes = {
 
   'GET /api/saglayicilar': async () => {
     const cfg = store.getProviderConfig();
-    const list = providers.list().map((p) => ({
-      ...p,
-      config: maskConfig(providers.get(p.id), (cfg.entries && cfg.entries[p.id]) || {}),
-      configured: isConfigured(providers.get(p.id), (cfg.entries && cfg.entries[p.id]) || {}),
-    }));
+    const list = providers.list().map((p) => {
+      const spec = providers.get(p.id);
+      const conf = (cfg.entries && cfg.entries[p.id]) || {};
+      const refState = providers.referenceState(spec, conf);
+      return {
+        ...p,
+        config: maskConfig(spec, conf),
+        configured: isConfigured(spec, conf),
+        // Karsilastirma tablosu ve uyarilar bunu okur - sabit bir alan DEGIL,
+        // kullanicinin kaydettigi ayara gore hesaplaniyor.
+        referenceState: refState.state,
+        referenceReason: refState.reason,
+        referenceFix: refState.fix,
+        // Yalnizca ONERI. Asla kendiliginden uygulanmaz; kullanici
+        // "Kutuya yaz" derse input'a yazilir, Kaydet'e basana kadar da
+        // hicbir sey degismez.
+        referenceGuess: typeof spec.referenceGuess === 'function'
+          ? spec.referenceGuess(conf.model || '')
+          : null,
+        canDiscoverReferenceFields: typeof spec.discoverReferenceFields === 'function',
+      };
+    });
     return { active: cfg.active || 'manual', providers: list };
+  },
+
+  /**
+   * Modelin gercek girdi semasindan referans gorsel alani adaylarini bulur.
+   * Tahmin degil, platformun kendi OpenAPI semasi okunur.
+   */
+  'POST /api/saglayici/referans-alanlari': async (body) => {
+    const spec = providers.get(body.id);
+    if (!spec || spec.id !== body.id) throw badRequest('Bilinmeyen saglayici.');
+    if (typeof spec.discoverReferenceFields !== 'function') {
+      throw badRequest('Bu platform icin alan kesfi desteklenmiyor.');
+    }
+    const cfg = store.getProviderConfig();
+    const conf = (cfg.entries && cfg.entries[spec.id]) || {};
+    const fields = await spec.discoverReferenceFields({
+      config: { ...conf, ...(body.model ? { model: body.model } : {}) },
+    });
+    return { id: spec.id, fields };
   },
 
   'POST /api/saglayici': async (body) => {
@@ -735,23 +865,196 @@ const routes = {
     return { ok: true, provider: spec.label, images };
   },
 
+  /**
+   * Bir kareyi "birincil referans" yapar.
+   *
+   * Rota once yazilmisti ama panelden HIC cagrilmiyordu - galeride buton yoktu.
+   */
   'POST /api/galeri/altin': async (body) => {
     const character = store.getCharacter();
     if (!character) throw notFound('Once karakter yarat.');
+
+    let item = null;
+    store.updateGallery((gallery) => {
+      item = gallery.find((g) => g.id === body.id) || null;
+      if (!item) return undefined;
+      for (const g of gallery) g.isGolden = g.id === item.id;
+      return gallery;
+    });
+
+    if (!item) throw notFound('Gorsel bulunamadi.');
+    if (!item.filename) throw badRequest('Bu kaydin dosyasi yok.');
+    // Etsy/Reklam tasarimlari karakterin YUZ referansi olamaz.
+    if (item.studio && item.studio !== 'karakter') {
+      throw badRequest('Bu kare bir tasarim stüdyosundan geliyor; karakterin yuz referansi olamaz.');
+    }
+
+    const guncel = store.updateCharacter((cur) => {
+      if (!cur) return undefined;
+      cur.reference = {
+        filename: item.filename,
+        publicUrl: (cur.reference && cur.reference.publicUrl) || '',
+        setAt: new Date().toISOString(),
+      };
+      return cur;
+    });
+
+    return { character: guncel, golden: item, gallery: store.getGalleryPage(60) };
+  },
+
+  /**
+   * Galeri karesini kaldirir.
+   *
+   * VARSAYILAN ARSIVDIR - dosya data/_arsiv/silinen/ altina tasinir.
+   * Vesikalik seti bir kareye dayaniyorsa 409 doner: silmek yuz kilidini
+   * sessizce koparir, kullanici bunu bilmeden onaylamamali.
+   */
+  'POST /api/galeri/sil': async (body) => {
     const gallery = store.getGallery();
     const item = gallery.find((g) => g.id === body.id);
     if (!item) throw notFound('Gorsel bulunamadi.');
 
-    for (const g of gallery) g.isGolden = g.id === item.id;
-    store.saveGallery(gallery);
+    const character = store.getCharacter();
+    const kullanan = [];
+    if (character) {
+      const set = character.referenceSet || {};
+      for (const [aci, kare] of Object.entries(set)) {
+        if (kare && kare.filename === item.filename) kullanan.push(aci);
+      }
+      if (character.reference && character.reference.filename === item.filename) {
+        kullanan.push('birincil');
+      }
+    }
 
-    character.reference = {
-      filename: item.filename,
-      publicUrl: (character.reference && character.reference.publicUrl) || '',
-      setAt: new Date().toISOString(),
+    if (kullanan.length && body.force !== true) {
+      const err = new Error(
+        `Bu kare vesikalik setinde kullaniliyor (${kullanan.join(', ')}). ` +
+        'Silersen yuz referansi kopar ve o aci yeniden uretilmeli.'
+      );
+      err.status = 409;
+      err.payload = { code: 'REFERANS_KULLANIMDA', angles: kullanan };
+      throw err;
+    }
+
+    // Once karakteri temizle: yarim kalirsa referans olmayan dosyayi gosterir.
+    if (kullanan.length) {
+      store.updateCharacter((cur) => {
+        if (!cur) return undefined;
+        const set = cur.referenceSet || {};
+        for (const [aci, kare] of Object.entries(set)) {
+          if (kare && kare.filename === item.filename) delete set[aci];
+        }
+        if (cur.reference && cur.reference.filename === item.filename) {
+          cur.reference = { filename: '', publicUrl: (cur.reference.publicUrl) || '', setAt: null };
+        }
+        return cur;
+      });
+    }
+
+    store.updateGallery((g) => g.filter((x) => x.id !== item.id));
+
+    // Dosyayi yalnizca baska kayit KULLANMIYORSA kaldir.
+    let dosya = { removed: false };
+    if (item.filename && store.galleryUsesFile(item.filename) === 0) {
+      dosya = store.trashImageFile(item.filename, { hard: body.hard === true });
+    }
+
+    const guncel = store.getCharacter();
+    return {
+      removed: item.id,
+      file: dosya,
+      clearedAngles: kullanan,
+      gallery: store.getGalleryPage(60),
+      reference: guncel ? reference.status(guncel) : null,
+      character: guncel,
     };
-    store.saveCharacter(character);
-    return { character, golden: item };
+  },
+
+  /**
+   * Var olan bir kareyi sonradan buyutur.
+   *
+   * Uretim sirasinda buyutme kapaliyken uretilmis kareler icin. Kayit
+   * YERINDE guncellenir (id degismez) ve karakterin referans dosya adlari
+   * senkronlanir - aksi halde reference.js dosya adiyla esledigi icin yuz
+   * referansi kopardi.
+   */
+  'POST /api/galeri/buyut': async (body) => {
+    const item = store.getGallery().find((g) => g.id === body.id);
+    if (!item) throw notFound('Gorsel bulunamadi.');
+
+    const upCfg = store.getUpscalerConfig();
+    const upSpec = upscalers.get(upCfg.active || 'none');
+    if (upSpec.id === 'none') {
+      const err = new Error('Bagli bir buyutme araci yok. Ayarlar > Buyutme bolumunden bir arac sec.');
+      err.status = 428;
+      throw err;
+    }
+
+    const buffer = store.readImageBuffer(item.filename);
+    if (!buffer) throw notFound('Bu kaydin dosyasi diskte yok.');
+
+    let up;
+    try {
+      up = await upSpec.upscale({
+        config: (upCfg.entries && upCfg.entries[upSpec.id]) || {},
+        buffer,
+        scale: Math.min(Math.max(Number(upCfg.scale) || 2, 1), upSpec.maxScale || 4),
+      });
+    } catch (err) {
+      // ORIJINAL HICBIR SEKILDE BOZULMAZ.
+      const e = new Error(`Buyutme basarisiz: ${err.message}`);
+      e.status = 502;
+      throw e;
+    }
+    if (!up || !up.buffer || up.skipped) {
+      throw badRequest('Buyutme araci gorsel dondurmedi.');
+    }
+
+    const ext = up.mime === 'image/jpeg' ? 'jpg' : up.mime === 'image/webp' ? 'webp' : 'png';
+    const yeni = store.saveImageBuffer(up.buffer, ext);
+    const eskiDosya = item.filename;
+
+    const guncelKayit = { ...item };
+    store.updateGallery((gallery) => {
+      const hedef = gallery.find((g) => g.id === body.id);
+      if (!hedef) return undefined;
+      hedef.previousFilename = eskiDosya;
+      hedef.filename = yeni.filename;
+      hedef.url = yeni.url;
+      hedef.upscaled = { by: upSpec.id, scale: upCfg.scale || 2, at: new Date().toISOString() };
+      Object.assign(guncelKayit, hedef);
+      return gallery;
+    });
+
+    // Karakter senkronu: reference.js dosya ADIYLA esliyor.
+    store.updateCharacter((cur) => {
+      if (!cur) return undefined;
+      let degisti = false;
+      const set = cur.referenceSet || {};
+      for (const kare of Object.values(set)) {
+        if (kare && kare.filename === eskiDosya) {
+          kare.filename = yeni.filename;
+          kare.url = yeni.url;
+          degisti = true;
+        }
+      }
+      if (cur.reference && cur.reference.filename === eskiDosya) {
+        cur.reference.filename = yeni.filename;
+        degisti = true;
+      }
+      return degisti ? cur : undefined;
+    });
+
+    if (store.galleryUsesFile(eskiDosya) === 0) {
+      store.trashImageFile(eskiDosya, { hard: false });
+    }
+
+    return {
+      item: guncelKayit,
+      upscaler: upSpec.id,
+      gallery: store.getGalleryPage(60),
+      character: store.getCharacter(),
+    };
   },
 
   'POST /api/sifirla': async (body) => {
@@ -922,11 +1225,89 @@ const server = http.createServer(async (req, res) => {
 
 store.ensureDirs();
 
+/**
+ * TEK ORNEK KILIDI.
+ *
+ * Ayni data/ klasorune iki sunucu sureci yazarsa galeri kareleri kayboluyor
+ * ve character.json bozulabiliyor. Store katmani artik dosya kilidiyle bunu
+ * savusturuyor, ama dogru cozum ikinci ornegi hic baslatmamak: iki panel ayni
+ * karakteri farkli bellek durumuyla gosterir, kullanici hangisinin dogru
+ * oldugunu bilemez.
+ *
+ * Kilit dosyasi PID tutuyor; surec cokerse bayat kilit otomatik temizlenir.
+ */
+const INSTANCE_FILE = path.join(store.DATA_DIR, '.instance');
+
+function claimInstance() {
+  for (let deneme = 0; deneme < 2; deneme++) {
+    try {
+      const fd = fs.openSync(INSTANCE_FILE, 'wx');
+      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, port: PORT, at: new Date().toISOString() }), 'utf8');
+      fs.closeSync(fd);
+      return;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+
+      let sahip = null;
+      try {
+        sahip = JSON.parse(fs.readFileSync(INSTANCE_FILE, 'utf8'));
+      } catch {
+        // Okunamayan kilit bayat sayilir.
+      }
+
+      let yasiyor = false;
+      if (sahip && sahip.pid) {
+        try {
+          process.kill(sahip.pid, 0); // sinyal gondermez, sadece varligi sorar
+          yasiyor = true;
+        } catch {
+          yasiyor = false;
+        }
+      }
+
+      if (yasiyor) {
+        console.error('');
+        console.error('  [HATA] Bu klasorde zaten bir panel calisiyor.');
+        console.error(`         PID ${sahip.pid} · http://localhost:${sahip.port || PORT}`);
+        console.error('');
+        console.error('         Ayni data/ klasorune iki sunucu yazarsa galeri kareleri');
+        console.error('         kaybolur ve karakter dosyasi bozulabilir. Ikinci ornek');
+        console.error('         BASLATILMADI.');
+        console.error('');
+        console.error('         Acik olani kullan, ya da once onu kapat (Ctrl+C).');
+        console.error('');
+        process.exit(1);
+      }
+
+      // Sahibi olmus - bayat kilidi temizle ve bir kez daha dene.
+      try { fs.unlinkSync(INSTANCE_FILE); } catch {}
+    }
+  }
+}
+
+function releaseInstance() {
+  try {
+    const sahip = JSON.parse(fs.readFileSync(INSTANCE_FILE, 'utf8'));
+    if (sahip && sahip.pid === process.pid) fs.unlinkSync(INSTANCE_FILE);
+  } catch {}
+}
+
+claimInstance();
+process.on('exit', releaseInstance);
+for (const sinyal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sinyal, () => {
+    releaseInstance();
+    process.exit(0);
+  });
+}
+
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
     console.error(`\n[HATA] ${PORT} portu dolu - panel muhtemelen zaten acik.`);
-    console.error(`        http://localhost:${PORT} adresini dene, ya da baska port kullan:`);
-    console.error('        PORT=4300 node server.js\n');
+    console.error(`        http://localhost:${PORT} adresini dene.`);
+    console.error('');
+    console.error('        Baska bir port acmak COZUM DEGIL: ayni klasorden ikinci bir');
+    console.error('        panel calistirmak galeri kareni kaybettirir. Once acik olani kapat.\n');
     process.exit(1);
   }
   console.error('\n[HATA] Sunucu hatasi:', err.message, '\n');

@@ -16,6 +16,8 @@ const S = {
   studios: [],
   studio: 'karakter',
   design: {},      // etsy/reklam tasarim formu
+  upscaler: undefined, // undefined = henuz sorulmadi, null = bagli arac yok
+  captionPlatform: 'instagram',
   busy: false,
 };
 
@@ -60,11 +62,13 @@ function copy(text) {
   );
 }
 
-function modal(title, bodyHtml, actions) {
+function modal(title, bodyHtml, actions, opts = {}) {
   const m = document.getElementById('modal');
   document.getElementById('modaltitle').textContent = title;
   document.getElementById('modalbody').innerHTML = bodyHtml;
   document.getElementById('modalbody').scrollTop = 0;
+  const kutu = m.querySelector('.modalbox');
+  if (kutu) kutu.classList.toggle('wide', !!opts.wide);
   const bar = document.getElementById('modalactions');
   bar.innerHTML = '';
   for (const a of actions) {
@@ -76,7 +80,70 @@ function modal(title, bodyHtml, actions) {
   }
   m.hidden = false;
 }
-function closeModal() { document.getElementById('modal').hidden = true; }
+function closeModal() {
+  const m = document.getElementById('modal');
+  m.hidden = true;
+  const kutu = m.querySelector('.modalbox');
+  if (kutu) kutu.classList.remove('wide');
+}
+
+/**
+ * REFERANS DURUMU BANNER'I - tek yerden.
+ *
+ * Eskiden buradaki kosul `supportsReference` bayragina bakiyordu ve o bayrak
+ * yalan soyluyordu: ComfyUI ve alan adi girilmemis Replicate/fal HICBIR uyari
+ * gostermiyordu, yani sessizlik "yuz kilidi acik" anlamina geliyordu.
+ * Artik uc durum var ve durum kullanicinin ayarina gore hesaplaniyor.
+ */
+function referenceBanner(kisa = false) {
+  const p = S.status && S.status.provider;
+  if (!p || !p.generates) return '';
+  const durum = p.referenceState || (p.supportsReference ? 'ready' : 'none');
+
+  if (durum === 'ready') {
+    if (kisa) return '';
+    return `<div class="notice ok">
+      <b>Yuz kilidi acik.</b> ${esc(p.label)} referans kareyi kabul ediyor -
+      uretilen her kare vesikalik setindeki en yakin aciyla eslestirilerek gonderiliyor.
+    </div>`;
+  }
+
+  if (durum === 'needs-config') {
+    return `<div class="notice bad">
+      <b>Yuz kilidi KAPALI.</b> ${esc(p.label)} referans gorseli destekliyor ama
+      <b>su anki ayarla gonderilmiyor</b>.<br>
+      ${p.referenceReason ? `${esc(p.referenceReason)}<br>` : ''}
+      ${p.referenceFix ? `<br><b>Yapilacak:</b> ${esc(p.referenceFix)}` : ''}
+      <div class="row" style="margin-top:10px">
+        <button class="ghost tiny" data-goto-settings="1">Ayarlara git</button>
+      </div>
+    </div>`;
+  }
+
+  // none
+  if (kisa) {
+    return `<div class="notice warn">
+      <b>${esc(p.label)} referans gorsel kabul etmiyor.</b> Acilar arasinda yuz kayabilir.
+    </div>`;
+  }
+  return `<div class="notice warn">
+    <b>Dikkat: ${esc(p.label)} referans gorsel kabul etmiyor.</b><br>
+    Vesikaliklar uretilir ama platforma geri gonderilemez - bu yuzden acilar arasinda yuz, sac uzunlugu
+    ve detaylar kayabilir. Yuzu <b>gercekten</b> kilitlemek icin referans destekleyen bir platform gerekir:
+    Replicate veya fal.ai (IP-Adapter / redux modelleri), yerel ComfyUI (IPAdapter FaceID) veya
+    "Ozel API" ile karakter referansi destekleyen bir servis. Ucretsiz secenek isin yapisini kurar,
+    yuzu tam kilitlemez.
+  </div>`;
+}
+
+// Banner'daki "Ayarlara git" butonu. Olay devri: her render'da yeniden
+// baglamak gerekmesin diye tek sefer, kapsayici uzerinde dinleniyor.
+view.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('[data-goto-settings]');
+  if (!b) return;
+  S.tab = 'ayarlar';
+  render();
+});
 
 // Kapatmanin uc yolu olsun: kose X, ESC tusu, arka plana tiklama.
 // Uzun listelerde alttaki buton gorunmezse bile pencere kapatilabilsin.
@@ -393,7 +460,11 @@ function renderWizardSummary() {
     if (q.type === 'measurements') {
       v = Object.entries(v || {}).map(([k, val]) => `${k.replace(/_/g, ' ')}: ${val}`).join(' · ');
     } else if (Array.isArray(v)) v = v.join(', ');
-    return `<div class="idcell"><span>${esc(q.label)}</span><b>${esc(v || 'otomatik doldurulacak')}</b></div>`;
+    // life.autoFill YALNIZCA hayat sorularini dolduruyor. Gorunus ve yuz
+    // alanlarinda "otomatik doldurulacak" yazmak yalan olurdu: bos birakilan
+    // gorunus alani prompt'a hic girmez, uydurulmaz.
+    const bosMetin = q.section === 'Hayat' ? 'otomatik doldurulacak' : 'belirtilmedi - prompta girmez';
+    return `<div class="idcell"><span>${esc(q.label)}</span><b>${esc(v || bosMetin)}</b></div>`;
   }).join('');
 
   const risky = (S.answers.distinctive || [])
@@ -633,9 +704,27 @@ async function renderDossier() {
       </div>
       <div class="card">
         <h2>Ses rehberi</h2>
-        <div class="field"><label>Dil kaydi</label>${esc(p.voiceGuide.register)}</div>
-        <div class="field"><label>Cumle uzunlugu</label>${esc(p.voiceGuide.sentenceLength)}</div>
-        <div class="field"><label>Emoji kurali</label>${esc(p.voiceGuide.emojiRule)}</div>
+        <p class="help">Gonderi metni motoru bu rehbere gore yaziyor.</p>
+        ${(() => {
+          // Korumasiz okuma eski/elle duzenlenmis dosyalarda paneli kiriyordu.
+          const vg = p.voiceGuide || {};
+          const satir = (etiket, deger) => deger
+            ? `<div class="field"><label>${esc(etiket)}</label>${esc(deger)}</div>`
+            : '';
+          return [
+            satir('Dil kaydi', vg.register),
+            satir('Cumle uzunlugu', vg.sentenceLength),
+            satir('Emoji kurali', vg.emojiRule),
+            satir('Bitis bicimi', vg.ctaStyle),
+            satir('Emoji seti', p.emojiStyle),
+            Array.isArray(vg.openers) && vg.openers.length
+              ? `<div class="field"><label>Acilis kaliplari</label>${vg.openers.map((o) => esc(o)).join('<br>')}</div>`
+              : '',
+            Array.isArray(vg.avoid) && vg.avoid.length
+              ? `<div class="field"><label>Kacinilacaklar</label>${vg.avoid.map((o) => esc(o)).join(' · ')}</div>`
+              : '',
+          ].filter(Boolean).join('');
+        })()}
       </div>
     </div>
 
@@ -734,14 +823,7 @@ async function renderReference() {
       anahtar istemiyor</b>. Ya da asagidan 8 prompt'u alip kendi aracinda uret, sonuclari elle ekle.
     </div>` : ''}
 
-    ${generates && !S.status.provider.supportsReference ? `<div class="notice warn">
-      <b>Dikkat: ${esc(S.status.provider.label)} referans gorsel kabul etmiyor.</b><br>
-      Vesikaliklar uretilir ama platforma geri gonderilemez - bu yuzden acilar arasinda yuz, sac uzunlugu
-      ve detaylar kayabilir. Yuzu <b>gercekten</b> kilitlemek icin referans destekleyen bir platform gerekir:
-      Replicate veya fal.ai (IP-Adapter / redux modelleri), yerel ComfyUI (IPAdapter FaceID) veya
-      "Ozel API" ile karakter referansi destekleyen bir servis. Ucretsiz secenek isin yapisini kurar,
-      yuzu tam kilitlemez.
-    </div>` : ''}
+    ${referenceBanner()}
 
     <div class="card">
       <div class="row">
@@ -850,6 +932,8 @@ async function renderProduction() {
       <b>Vesikalik seti eksik (${ref.done}/${ref.total}).</b> Once onu tamamlaman tutarliligi ciddi artirir.
     </div>` : ''}
 
+    ${referenceBanner(true)}
+
     ${S.status.provider.active === 'pollinations' ? `<div class="notice bad">
       <b>Ucretsiz saglayici FOTOGRAF GERCEKCILIGI veremez.</b><br>
       Pollinations su an yalnizca <span class="mono">sana</span> modelini sunuyor. SANA hiz icin
@@ -869,6 +953,25 @@ async function renderProduction() {
         <button class="ghost" id="briefgo">Sahneye cevir</button>
       </div>
       <div id="briefout"></div>
+    </div>
+
+    <div class="card" id="captioncard">
+      <h2>Gonderi metni</h2>
+      <p class="help">Karakterin KENDI sesiyle yazilir (burcu, egitimi, ilgi alanlari ve ses rehberi).
+      Yerel uretilir - harici bir yapay zeka servisi ya da kredi gerekmez.
+      Asagidaki sahne neyse metin de o sahne icin yazilir.</p>
+      <div class="choices" id="platlist">
+        ${CAPTION_PLATFORMS.map((p) => `<button class="choice ${S.captionPlatform === p.id ? 'on' : ''}" data-plat="${p.id}">
+          <b>${esc(p.label)}</b><br><span class="dim" style="font-size:12px">${p.max} karakter</span>
+        </button>`).join('')}
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" id="f_ailabel" style="width:auto" checked> AI etiketi ekle
+        </label>
+        <button class="ghost" id="captiongo">Metin uret</button>
+      </div>
+      <div id="captionout"></div>
     </div>
 
     <div class="card">
@@ -942,6 +1045,37 @@ async function renderProduction() {
     }
   };
 
+  // Gonderi metni: gorselle AYNI sahneyi kullanir, yoksa metin baska bir
+  // kareyi anlatir.
+  view.querySelectorAll('[data-plat]').forEach((b) => {
+    b.onclick = () => {
+      S.captionPlatform = b.dataset.plat;
+      view.querySelectorAll('[data-plat]').forEach((x) => x.classList.toggle('on', x === b));
+    };
+  });
+
+  const capBtn = document.getElementById('captiongo');
+  if (capBtn) {
+    capBtn.onclick = async () => {
+      const box = document.getElementById('captionout');
+      capBtn.disabled = true;
+      box.innerHTML = '<div class="card"><span class="spin"></span>metin yaziliyor...</div>';
+      try {
+        const data = await api('/api/metin', {
+          scene: currentScene(),
+          platform: S.captionPlatform,
+          variants: 3,
+          aiLabel: document.getElementById('f_ailabel').checked,
+        });
+        renderCaptions(box, data);
+      } catch (err) {
+        box.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+      } finally {
+        capBtn.disabled = false;
+      }
+    };
+  }
+
   function currentScene() {
     S.realism = document.getElementById('f_realism').value;
     return {
@@ -959,6 +1093,8 @@ async function renderProduction() {
   }
 }
 
+// NOT: asagidaki "prompt" kartlari GORSEL MODELI dilidir (flux/sdxl/midjourney).
+// Gonderi metni kartindaki "platform" ise SOSYAL PLATFORMDUR. Iki ayri kavram.
 async function showPrompts(scene) {
   const out = document.getElementById('output');
   out.innerHTML = '<div class="card"><span class="spin"></span>prompt hazirlaniyor...</div>';
@@ -1061,11 +1197,34 @@ async function renderPlan() {
           <div class="core" style="max-height:90px;overflow:auto">${esc(d.scene.pose)} — ${esc(d.scene.setting)}</div>
           <div class="row" style="margin-top:12px">
             <button class="ghost tiny" data-planuret="${i}">Uret</button>
+            <button class="ghost tiny" data-planmetin="${i}">Metin uret</button>
             <button class="ghost tiny" data-planuretim="${i}">Uretim'e gonder</button>
           </div>
           <div id="planout${i}"></div>
         </div>`).join('')}
     </div>`;
+
+  // Plan gununden gonderi metni: gorsel uretmeden, bagli API gerekmeden.
+  view.querySelectorAll('[data-planmetin]').forEach((b) => {
+    b.onclick = async () => {
+      const i = Number(b.dataset.planmetin);
+      const box = document.getElementById(`planout${i}`);
+      b.disabled = true;
+      box.innerHTML = '<p class="help"><span class="spin"></span>metin yaziliyor...</p>';
+      try {
+        const data = await api('/api/metin', {
+          scene: S.plan[i].scene,
+          platform: S.captionPlatform,
+          variants: 1,
+        });
+        renderCaptions(box, data);
+      } catch (err) {
+        box.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+      } finally {
+        b.disabled = false;
+      }
+    };
+  });
 
   view.querySelectorAll('[data-planuretim]').forEach((b) => {
     b.onclick = () => {
@@ -1323,39 +1482,124 @@ function renderStudioArchive(studioId) {
     ${items.length ? `<div class="gallery">${items.map((i) => `
       <div class="shot"><img src="${esc(i.url)}" loading="lazy">
         <div class="meta">${esc(i.category || '')}<br>${new Date(i.createdAt).toLocaleString('tr-TR')}
-          <div class="row" style="margin-top:8px">
-            <a class="ghost tiny" style="text-decoration:none" href="${esc(i.url)}" download>Indir</a>
+          <div class="actions">
+            <a class="ghost tiny" href="${esc(i.url)}" download>Indir</a>
+            <button class="ghost tiny danger" data-arsivsil="${esc(i.id)}">Sil</button>
           </div>
         </div></div>`).join('')}</div>`
       : '<div class="empty">Henuz tasarim yok.</div>'}`;
+
+  view.querySelectorAll('[data-arsivsil]').forEach((b) => {
+    b.onclick = () => {
+      modal('Tasarimi sil',
+        '<p>Bu tasarim <b>arsive tasinacak</b>. Dosya silinmiyor, kayit kaldiriliyor.</p>',
+        [
+          {
+            label: 'Sil',
+            className: 'danger ghost',
+            onClick: async () => {
+              try {
+                await api('/api/galeri/sil', { id: b.dataset.arsivsil });
+                closeModal();
+                toast('Silindi (arsive tasindi).', 'ok');
+                await refresh();
+                render();
+              } catch (err) { toast(err.message, 'bad'); }
+            },
+          },
+          { label: 'Vazgec', className: 'btn', onClick: closeModal },
+        ]);
+    };
+  });
+}
+
+/* ------------------------------------------------------------ gonderi metni */
+
+// Panelin bildigi sosyal platformlar. src/caption.js PLATFORMS ile ayni sira.
+// DIKKAT: bu SOSYAL PLATFORM listesi; prompt kartlarindaki "gorsel modeli
+// dili" (flux/sdxl/midjourney) bambaska bir kavram.
+const CAPTION_PLATFORMS = [
+  { id: 'instagram', label: 'Instagram', max: 2200 },
+  { id: 'tiktok', label: 'TikTok', max: 2200 },
+  { id: 'x', label: 'X (Twitter)', max: 280 },
+  { id: 'linkedin', label: 'LinkedIn', max: 3000 },
+  { id: 'youtube', label: 'YouTube', max: 5000 },
+  { id: 'pinterest', label: 'Pinterest', max: 500 },
+  { id: 'threads', label: 'Threads', max: 500 },
+];
+
+function renderCaptions(box, data) {
+  box.innerHTML = `
+    <hr class="sep">
+    <p class="help">${esc(data.platformLabel)} · ${esc(data.platformNote || '')}</p>
+    ${data.variants.map((v, i) => `
+      <div class="card" style="margin-bottom:10px">
+        <div class="row" style="justify-content:space-between">
+          <b>Varyant ${i + 1}</b>
+          <span class="dim">${v.chars} / ${v.max} karakter${v.truncated ? ' · kisaltildi' : ''}</span>
+        </div>
+        <div class="core" style="white-space:pre-wrap">${esc(v.text)}</div>
+        <div class="row" style="margin-top:8px">
+          <button class="ghost tiny" data-cap="${i}">Kopyala</button>
+        </div>
+      </div>`).join('')}
+    <p class="help">${esc(data.aiNote)}</p>`;
+
+  box.querySelectorAll('[data-cap]').forEach((b) => {
+    b.onclick = () => copy(data.variants[Number(b.dataset.cap)].text);
+  });
 }
 
 /* ---------------------------------------------------------------- gallery */
 
-function renderGallery() {
+async function renderGallery() {
   const g = S.status.gallery;
+
+  // Buyutme araci bagli mi? Butonu bosuna gostermemek icin bir kez sorulur.
+  if (S.upscaler === undefined) {
+    try {
+      const u = await api('/api/buyutme');
+      S.upscaler = u && u.active && u.active !== 'none' ? u : null;
+    } catch { S.upscaler = null; }
+  }
+  const buyutmeVar = !!S.upscaler;
+
   view.innerHTML = `
     <h1>Galeri</h1>
     <p class="lead">Hepsi bagladigin uretim API'sinden geldi.</p>
-    ${g.length ? `<div class="gallery">${g.map((i) => `
+    ${g.length ? `<div class="gallery">${g.map((i) => {
+      // "· " ayraci bos alanlarda tek basina kaliyordu.
+      const meta = [i.category, i.providerLabel || i.provider].filter(Boolean).map(esc).join(' · ');
+      const studyo = i.studio && i.studio !== 'karakter';
+      return `
       <div class="shot ${i.isGolden ? 'golden' : ''}">
-        <img src="${esc(i.url)}" loading="lazy">
+        <img src="${esc(i.url)}" loading="lazy" data-big="${esc(i.id)}">
         <div class="meta">
           ${i.isGolden ? '<span class="badge">★ birincil referans</span><br>' : ''}
-          ${esc(i.category || '')} · ${esc(i.providerLabel || i.provider || '')}<br>
+          ${meta}${meta ? '<br>' : ''}
           ${new Date(i.createdAt).toLocaleString('tr-TR')}
-          <div class="row" style="margin-top:8px">
-            <button class="ghost tiny" data-prompt="${esc(i.id)}">Prompt</button>
+          ${i.upscaled && i.upscaled.failed ? '<br><span class="dim">buyutme basarisiz - orijinal kaydedildi</span>' : ''}
+          ${i.upscaled && !i.upscaled.failed ? `<br><span class="dim">buyutuldu ${esc(String(i.upscaled.scale || ''))}x</span>` : ''}
+          <div class="actions">
+            <a class="ghost tiny" href="${esc(i.url)}" download>Indir</a>
+            <button class="ghost tiny" data-big="${esc(i.id)}">Buyuk goster</button>
+            ${i.prompt ? `<button class="ghost tiny" data-prompt="${esc(i.id)}">Prompt</button>` : ''}
+            ${buyutmeVar && !(i.upscaled && !i.upscaled.failed) ? `<button class="ghost tiny" data-up="${esc(i.id)}">Kaliteyi buyut</button>` : ''}
+            ${!studyo && !i.isGolden ? `<button class="ghost tiny" data-golden="${esc(i.id)}">Birincil yap</button>` : ''}
+            <button class="ghost tiny danger" data-del="${esc(i.id)}">Sil</button>
           </div>
         </div>
-      </div>`).join('')}</div>`
+      </div>`;
+    }).join('')}</div>`
       : `<div class="empty">Henuz gorsel yok.<br><br>
          <span class="dim">Bu otomasyon gorsel uretmez ve stok gorsel kullanmaz -
          once vesikalik setini uret.</span></div>`}`;
 
+  const bul = (id) => g.find((i) => i.id === id);
+
   view.querySelectorAll('[data-prompt]').forEach((b) => {
     b.onclick = () => {
-      const item = g.find((i) => i.id === b.dataset.prompt);
+      const item = bul(b.dataset.prompt);
       modal('Kullanilan prompt', `<div class="core">${esc(item.prompt)}</div>
         <p class="help">seed: ${item.seed != null ? item.seed : 'yok'} · ${esc(item.providerLabel || '')}</p>`,
       [
@@ -1364,9 +1608,181 @@ function renderGallery() {
       ]);
     };
   });
+
+  // Buyuk goster: sunucuya gitmez, ayni dosyayi buyuk gosterir.
+  view.querySelectorAll('[data-big]').forEach((b) => {
+    b.onclick = () => {
+      const item = bul(b.dataset.big);
+      if (!item) return;
+      modal(item.category || 'Gorsel',
+        `<img class="full" src="${esc(item.url)}" alt="">`,
+        [
+          { label: 'Indir', onClick: () => { window.location.href = item.url; } },
+          { label: 'Kapat', className: 'btn', onClick: closeModal },
+        ], { wide: true });
+    };
+  });
+
+  view.querySelectorAll('[data-golden]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await api('/api/galeri/altin', { id: b.dataset.golden });
+        toast('Birincil referans guncellendi.', 'ok');
+        await refresh();
+        render();
+      } catch (err) {
+        toast(err.message, 'bad');
+        b.disabled = false;
+      }
+    };
+  });
+
+  // Buyutme UCRETLI olabilir ve dakikalar surebilir (Replicate 4-5 dk).
+  // Buton kilitlenmezse kullanici arka arkaya tiklayip birden fazla
+  // ucretli istek acar.
+  view.querySelectorAll('[data-up]').forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      const eski = b.textContent;
+      b.textContent = 'Buyutuluyor...';
+      try {
+        await api('/api/galeri/buyut', { id: b.dataset.up });
+        toast('Kare buyutuldu.', 'ok');
+        await refresh();
+        render();
+      } catch (err) {
+        toast(err.message, 'bad');
+        b.disabled = false;
+        b.textContent = eski;
+      }
+    };
+  });
+
+  view.querySelectorAll('[data-del]').forEach((b) => {
+    b.onclick = () => {
+      const item = bul(b.dataset.del);
+      const sil = async (force) => {
+        try {
+          const res = await api('/api/galeri/sil', { id: item.id, force });
+          closeModal();
+          toast(res.clearedAngles && res.clearedAngles.length
+            ? `Silindi - ${res.clearedAngles.length} vesikalik acisi bosaldi.`
+            : 'Silindi (arsive tasindi).', 'ok');
+          await refresh();
+          render();
+        } catch (err) {
+          if (err.data && err.data.code === 'REFERANS_KULLANIMDA') {
+            modal('Bu kare vesikalik setinde kullaniliyor',
+              `<div class="notice bad">${esc(err.message)}</div>
+               <p class="help">Silersen o aci icin yuz referansi kalmaz ve
+               "Vesikalik seti" sekmesinden yeniden uretmen gerekir.</p>`,
+              [
+                { label: 'Yine de sil', className: 'danger ghost', onClick: () => sil(true) },
+                { label: 'Vazgec', className: 'btn', onClick: closeModal },
+              ]);
+            return;
+          }
+          toast(err.message, 'bad');
+        }
+      };
+
+      modal('Kareyi sil',
+        `<p>Bu kare <b>arsive tasinacak</b> (data/_arsiv/silinen/). Dosya silinmiyor,
+         galeri kaydi kaldiriliyor.</p>
+         <p class="help">Prompt ve seed kaydi geri gelmez.</p>`,
+        [
+          { label: 'Sil', className: 'danger ghost', onClick: () => sil(false) },
+          { label: 'Vazgec', className: 'btn', onClick: closeModal },
+        ]);
+    };
+  });
 }
 
 /* --------------------------------------------------------------- settings */
+
+const UCRET_ETIKET = {
+  bedava: { metin: 'Bedava', sinif: 'iyi' },
+  yerel: { metin: 'Yerel (bedava)', sinif: 'iyi' },
+  kredili: { metin: 'Kredili', sinif: 'orta' },
+  degisir: { metin: 'Degisir', sinif: '' },
+  yok: { metin: '-', sinif: '' },
+};
+const GERCEKCILIK_ETIKET = {
+  dusuk: { metin: 'Dusuk', sinif: 'kotu' },
+  orta: { metin: 'Orta', sinif: 'orta' },
+  yuksek: { metin: 'Yuksek', sinif: 'iyi' },
+  uretmez: { metin: 'Uretmez', sinif: '' },
+  degisir: { metin: 'Degisir', sinif: '' },
+};
+const REFERANS_ETIKET = {
+  ready: { metin: 'Hazir', sinif: 'iyi' },
+  'needs-config': { metin: 'Ayar gerekir', sinif: 'orta' },
+  none: { metin: 'Yok', sinif: 'kotu' },
+};
+
+function etiket(tablo, anahtar) {
+  const e = tablo[anahtar] || { metin: anahtar || '-', sinif: '' };
+  return `<span class="tag ${e.sinif}">${esc(e.metin)}</span>`;
+}
+
+/**
+ * KARSILASTIRMA TABLOSU.
+ *
+ * "Hangisini secmeliyim" sorusunun cevabi buydu: kullanici hangi platformun
+ * fotogerceklik verdigini, hangisinin referans kabul ettigini, ne kadara mal
+ * oldugunu hicbir yerde goremiyordu.
+ *
+ * FIYAT RAKAMI YAZILMAZ. Kodda fiyat tutulmuyor ve tutulmayacak - rakamlar
+ * eskiyor ve yanlis bilgi vermek bilgi vermemekten kotu. Yalnizca kategori
+ * ve platformun kendi guncel fiyat sayfasina link.
+ */
+function comparisonTable(list, active) {
+  const satir = (p) => {
+    const notlar = [p.realismNote, p.referenceReason, p.resolutionNote, p.costNote, p.setupNote]
+      .filter(Boolean).join(' ');
+    return `
+    <tr class="${p.id === active ? 'aktif' : ''}">
+      <td data-label="Platform">
+        <b>${esc(p.label)}</b>
+        <div class="rozetler">
+          ${p.id === active ? '<span class="tag iyi">aktif</span>' : ''}
+          ${p.local ? '<span class="tag">yerel</span>' : ''}
+          ${!p.configured && p.id !== 'manual' ? '<span class="tag orta">ayarlanmadi</span>' : ''}
+        </div>
+      </td>
+      <td data-label="Ucret">${etiket(UCRET_ETIKET, p.cost)}</td>
+      <td data-label="Fotogerceklik">${etiket(GERCEKCILIK_ETIKET, p.realism)}</td>
+      <td data-label="Referans gorsel">${etiket(REFERANS_ETIKET, p.referenceState)}</td>
+      <td data-label="Cozunurluk">${esc(p.maxResolution)}</td>
+      <td data-label="Kurulum">
+        ${esc(p.setup)}
+        ${p.id !== active ? `<div class="row" style="margin-top:6px"><button class="ghost tiny" data-pick-provider="${esc(p.id)}">Sec</button></div>` : ''}
+      </td>
+    </tr>
+    ${notlar ? `<tr class="notsatiri ${p.id === active ? 'aktif' : ''}"><td colspan="6"><span class="help">${esc(notlar)}</span></td></tr>` : ''}`;
+  };
+
+  return `
+  <details class="cmp" open>
+    <summary>Hangisini secmeliyim? - 10 platformun karsilastirmasi</summary>
+    <div class="cmpwrap">
+      <table class="cmptable">
+        <thead><tr>
+          <th>Platform</th><th>Ucret</th><th>Fotogerceklik</th>
+          <th>Referans gorsel</th><th>Cozunurluk</th><th>Kurulum</th>
+        </tr></thead>
+        <tbody>${list.map(satir).join('')}</tbody>
+      </table>
+    </div>
+    <p class="help">
+      <b>"Referans gorsel"</b> yuz kilidinin calisip calismadigini soyler ve <b>senin ayarina gore</b>
+      hesaplanir - "Ayar gerekir" yazan bir platformda kare uretirsen yuz her seferinde kayar.<br>
+      <b>Fiyat rakami tutulmuyor</b> (eskiyor ve yanlis bilgi vermek istemiyoruz). Guncel fiyatlar:
+      ${list.filter((p) => p.pricingUrl).map((p) => `<a href="${esc(p.pricingUrl)}" target="_blank" rel="noreferrer">${esc(p.label.split(' ')[0])}</a>`).join(' · ')}
+    </p>
+  </details>`;
+}
 
 function renderSettings() {
   const list = S.providers.providers;
@@ -1385,11 +1801,17 @@ function renderSettings() {
 
     <div class="card">
       <h2>Gorsel uretim saglayicisi</h2>
+
+      ${comparisonTable(list, active)}
+
       <div class="field">
         <label>Aktif platform</label>
         <select id="provsel">
           ${list.map((p) => `<option value="${p.id}" ${p.id === active ? 'selected' : ''}>
-            ${esc(p.label)}${p.local ? ' (yerel)' : ''}${p.configured || p.id === 'manual' ? '' : ' — ayarlanmadi'}
+            ${esc(p.label)}${p.local ? ' (yerel)' : ''}${p.configured || p.id === 'manual' ? '' : ' — ayarlanmadi'}${
+              p.referenceState === 'ready' ? ' · yuz kilidi ✓'
+                : p.referenceState === 'needs-config' ? ' · yuz kilidi ayar bekliyor' : ''
+            }
           </option>`).join('')}
         </select>
         <p class="help">${esc(spec.blurb || '')}</p>
@@ -1434,6 +1856,16 @@ function renderSettings() {
       <div class="row"><button class="danger ghost" id="wipe">TUM VERIYI SIL</button></div>
       <p class="help">Komut satirindan: <span class="mono">node reset.js --confirm</span></p>
     </div>`;
+
+  // Tablodaki "Sec" butonu MEVCUT akisi kullanir: select'i degistirip
+  // onun onchange'ini tetikler. Boylece tek bir kod yolu kalir.
+  view.querySelectorAll('[data-pick-provider]').forEach((b) => {
+    b.onclick = () => {
+      const s = document.getElementById('provsel');
+      s.value = b.dataset.pickProvider;
+      s.onchange();
+    };
+  });
 
   const sel = document.getElementById('provsel');
   sel.onchange = async () => {
@@ -1568,6 +2000,7 @@ function renderSettings() {
           scale: Number(document.getElementById('upscale').value),
         });
         toast('Buyutme ayari kaydedildi.', 'ok');
+        S.upscaler = undefined; // galeri butonu icin onbellegi tazele
         renderSettings();
       } catch (err) {
         toast(err.message, 'bad');
@@ -1601,11 +2034,89 @@ function renderSettings() {
           <textarea id="pf_${f.key}">${esc(val)}</textarea>
           ${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}${maskedNote}</div>`;
       }
+      // Referans alani BOSSA bu, yuz kilidinin kapali olmasinin tek sebebidir.
+      // Sessiz gecme: kalici kirmizi not + oneri + (varsa) gercek sema kesfi.
+      const refNotu = f.key === 'referenceField' ? (() => {
+        const bos = !String(val || '').trim();
+        const g = p.referenceGuess;
+        const oneri = g && g.key
+          ? `<div class="guessbox">
+               <b>Oneri:</b> <span class="mono">${esc(g.key)}</span>
+               <span class="dim">(${esc(g.confidence)} guven)</span><br>
+               <span class="help">${esc(g.why)}</span>
+               <div class="row" style="margin-top:6px">
+                 <button class="ghost tiny" data-guess="${esc(g.key)}">Kutuya yaz</button>
+                 ${p.canDiscoverReferenceFields ? '<button class="ghost tiny" data-discover="1">Modelin alanlarini bul</button>' : ''}
+               </div>
+             </div>`
+          : (g ? `<div class="guessbox warnbox"><span class="help">${esc(g.why)}</span>
+                 ${p.canDiscoverReferenceFields ? '<div class="row" style="margin-top:6px"><button class="ghost tiny" data-discover="1">Modelin alanlarini bul</button></div>' : ''}
+               </div>` : '');
+        return (bos
+          ? `<p class="help bad-help"><b>Bu kutu bos oldugu icin referans kare GONDERILMIYOR - yuz kilidi kapali.</b></p>`
+          : '') + oneri;
+      })() : '';
+
       return `<div class="field"><label>${esc(f.label)}${f.required ? ' *' : ''}</label>
         <input id="pf_${f.key}" type="${f.type === 'number' ? 'number' : 'text'}"
                value="${esc(val)}" ${f.type === 'password' ? 'autocomplete="off" spellcheck="false"' : ''}>
-        ${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}${maskedNote}</div>`;
+        ${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}${maskedNote}${refNotu}</div>`;
     }).join('');
+
+    // ONERI ASLA KENDILIGINDEN UYGULANMAZ. Buton yalnizca input'u doldurur;
+    // Kaydet'e basilana kadar hicbir sey degismez.
+    box.querySelectorAll('[data-guess]').forEach((b) => {
+      b.onclick = () => {
+        const input = document.getElementById('pf_referenceField');
+        if (input) { input.value = b.dataset.guess; input.focus(); }
+        toast('Kutuya yazildi - kaydetmeyi unutma.', 'ok');
+      };
+    });
+
+    const bul = box.querySelector('[data-discover]');
+    if (bul) {
+      bul.onclick = async () => {
+        bul.disabled = true;
+        const eskiMetin = bul.textContent;
+        bul.textContent = 'Araniyor...';
+        try {
+          const modelInput = document.getElementById('pf_model');
+          const res = await api('/api/saglayici/referans-alanlari', {
+            id: p.id,
+            model: modelInput ? modelInput.value : undefined,
+          });
+          if (!res.fields.length) {
+            modal('Referans alani bulunamadi',
+              `<p>Bu modelin girdi semasinda gorsel kabul eden bir alan yok.</p>
+               <p class="help">Buyuk ihtimalle saf metin-den-gorsel bir model. Yuz kilidi icin
+               redux / IP-Adapter / InstantID gibi referans destekleyen bir modele gecmen gerekiyor.</p>`,
+              [{ label: 'Kapat', className: 'btn', onClick: closeModal }]);
+          } else {
+            modal('Modelin gorsel alanlari',
+              `<p class="help">Modelin kendi semasindan okundu - tahmin degil.</p>` +
+              res.fields.map((x) => `<div class="core" style="margin-bottom:6px">
+                  <b>${esc(x.key)}</b>${x.title && x.title !== x.key ? ` - ${esc(x.title)}` : ''}
+                  ${x.description ? `<br><span class="help">${esc(x.description)}</span>` : ''}
+                  <div class="row" style="margin-top:6px"><button class="ghost tiny" data-pick="${esc(x.key)}">Bunu kullan</button></div>
+                </div>`).join(''),
+              [{ label: 'Kapat', className: 'btn', onClick: closeModal }]);
+            document.querySelectorAll('[data-pick]').forEach((pb) => {
+              pb.onclick = () => {
+                const input = document.getElementById('pf_referenceField');
+                if (input) input.value = pb.dataset.pick;
+                closeModal();
+                toast('Kutuya yazildi - kaydetmeyi unutma.', 'ok');
+              };
+            });
+          }
+        } catch (err) {
+          toast(err.message, 'bad');
+        } finally {
+          bul.disabled = false;
+          bul.textContent = eskiMetin;
+        }
+      };
+    }
   }
 }
 
