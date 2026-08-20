@@ -18,7 +18,7 @@
 const store = require('../../store');
 const design = require('./design');
 const listing = require('./listing');
-const render = require('./render');
+const render = require('../../raster');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -28,7 +28,7 @@ function badRequest(message) {
 
 module.exports = {
   id: 'etsy',
-  label: 'Etsy POD Studyosu',
+  label: 'Etsy POD',
   icon: '🎨',
   tagline: 'Baskiya hazir tasarim + Etsy listeleme metni. Tipografi tarafi tamamen bedava.',
   needsProvider: false,

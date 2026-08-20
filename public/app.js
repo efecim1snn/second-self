@@ -13,6 +13,9 @@ const S = {
   scene: null,
   plan: null,
   edit: null,      // karakter dosyasi formundaki bekleyen degisiklikler
+  studios: [],
+  studio: 'karakter',
+  design: {},      // etsy/reklam tasarim formu
   busy: false,
 };
 
@@ -102,19 +105,52 @@ async function refresh() {
     ? `${c.identity.name} · @${c.identity.handle} · ${c.life ? c.life.city : ''} · seed ${c.seed}`
     : 'karakter yok - sihirbaz bekliyor';
 
+  S.studios = S.status.studios || [];
+  S.studio = S.status.activeStudio || 'karakter';
+  studioBar();
+
   const chip = document.getElementById('providerchip');
   const p = S.status.provider;
   chip.className = 'providerchip ' + (p.generates ? 'live' : 'none');
   chip.textContent = p.generates ? `Uretici: ${p.label}` : 'Uretici bagli degil';
 }
 
+/** Ust bardaki studyo gecisi: kim ne uretmek istiyorsa ona tiklar. */
+function studioBar() {
+  const bar = document.getElementById('studiobar');
+  if (!bar) return;
+  bar.innerHTML = S.studios.map((st) => `
+    <button data-studio="${esc(st.id)}" class="${S.studio === st.id ? 'on' : ''}" title="${esc(st.tagline || '')}">
+      <span>${esc(st.icon || '')}</span> ${esc(st.label)}
+    </button>`).join('');
+  bar.querySelectorAll('button').forEach((b) => {
+    b.onclick = async () => {
+      if (b.dataset.studio === S.studio) return;
+      await api('/api/studyolar/aktif', { id: b.dataset.studio });
+      S.studio = b.dataset.studio;
+      S.tab = null;
+      await refresh();
+      render();
+    };
+  });
+}
+
+function studioTabs() {
+  const st = S.studios.find((x) => x.id === S.studio);
+  if (!st) return [['ayarlar', 'Ayarlar']];
+  if (S.studio === 'karakter') {
+    const has = S.status && S.status.hasCharacter;
+    const ref = S.status && S.status.reference;
+    const refLabel = ref ? `Vesikalik ${ref.done}/${ref.total}` : 'Vesikalik';
+    return has
+      ? [['dosya', 'Karakter dosyasi'], ['vesikalik', refLabel], ['uretim', 'Uretim'], ['plan', 'Haftalik plan'], ['galeri', 'Galeri'], ['ayarlar', 'Ayarlar']]
+      : [['kurulum', 'Kurulum'], ['ayarlar', 'Ayarlar']];
+  }
+  return [...st.tabs.map((t) => [t.id, t.label]), ['ayarlar', 'Ayarlar']];
+}
+
 function tabs() {
-  const has = S.status && S.status.hasCharacter;
-  const ref = S.status && S.status.reference;
-  const refLabel = ref ? `Vesikalik ${ref.done}/${ref.total}` : 'Vesikalik';
-  const items = has
-    ? [['dosya', 'Karakter dosyasi'], ['vesikalik', refLabel], ['uretim', 'Uretim'], ['plan', 'Haftalik plan'], ['galeri', 'Galeri'], ['ayarlar', 'Ayarlar']]
-    : [['kurulum', 'Kurulum'], ['ayarlar', 'Ayarlar']];
+  const items = studioTabs();
   if (!items.find((i) => i[0] === S.tab)) S.tab = items[0][0];
   tabsEl.innerHTML = items
     .map(([id, label]) => `<button data-tab="${id}" class="${S.tab === id ? 'on' : ''}">${esc(label)}</button>`)
@@ -190,6 +226,9 @@ async function render() {
   // Karsilama yalnizca bir kez, en basta.
   if (S.status && S.status.app && !S.status.app.welcomeSeen) return renderWelcome();
   tabs();
+  if (S.tab === 'ayarlar') return renderSettings();
+  if (S.studio === 'etsy') return renderStudioDesign('etsy');
+  if (S.studio === 'reklam') return renderStudioDesign('reklam');
   if (S.tab === 'kurulum') return renderWizard();
   if (S.tab === 'dosya') return renderDossier();
   if (S.tab === 'vesikalik') return renderReference();
@@ -1053,6 +1092,242 @@ async function renderPlan() {
       }
     };
   });
+}
+
+/* ------------------------------------------------ tasarim studyolari */
+
+/**
+ * Etsy ve Reklam studyolari ayni kalibi kullanir: form -> canli SVG onizleme
+ * -> baskiya hazir PNG. Ikisi de tamamen yerel ve bedava calisir.
+ */
+const STUDIO_FORMS = {
+  etsy: {
+    title: 'Baskiya hazir tasarim',
+    lead: 'Tipografi tasarimlari tamamen yerel uretilir - AI gerekmez, bedava ve sinirsizdir. Cikti seffaf PNG, 300 DPI.',
+    fields: [
+      { key: 'lines', label: 'Tasarim metni (her satir ayri)', type: 'lines', rows: 4, placeholder: 'POWERED BY\nCOFFEE\nAND CAT HAIR' },
+      { key: 'layout', label: 'Dizilim', type: 'select', from: 'layouts' },
+      { key: 'palette', label: 'Renk', type: 'select', from: 'palettes' },
+      { key: 'font', label: 'Yazi tipi', type: 'select', from: 'fonts' },
+      { key: 'size', label: 'Urun / olcu', type: 'select', from: 'sizes' },
+    ],
+  },
+  reklam: {
+    title: 'Reklam gorseli',
+    lead: 'Sosyal medya reklam, kampanya, duyuru ve etkinlik gorselleri. AI gerekmez: yazi isi vektorle daha keskin cikar.',
+    fields: [
+      { key: 'brand', label: 'Marka / ust satir', type: 'text', placeholder: 'MARKA ADI' },
+      { key: 'badge', label: 'Rozet (kampanya orani vb.)', type: 'text', placeholder: '%40' },
+      { key: 'headline', label: 'Ana baslik', type: 'text', placeholder: 'Sezon sonu indirimi' },
+      { key: 'sub', label: 'Alt metin', type: 'text', placeholder: 'Secili urunlerde gecerlidir.' },
+      { key: 'cta', label: 'Cagri butonu', type: 'text', placeholder: 'Hemen incele' },
+      { key: 'footer', label: 'Alt satir (site / tarih / adres)', type: 'text', placeholder: 'site.com' },
+      { key: 'layout', label: 'Dizilim', type: 'select', from: 'layouts' },
+      { key: 'theme', label: 'Tema', type: 'select', from: 'themes' },
+      { key: 'size', label: 'Olcu', type: 'select', from: 'sizes' },
+    ],
+  },
+};
+
+async function renderStudioDesign(studioId) {
+  if (S.tab === 'arsiv') return renderStudioArchive(studioId);
+  if (studioId === 'etsy' && S.tab === 'listeleme') return renderEtsyListing();
+
+  const spec = STUDIO_FORMS[studioId];
+  const opts = await api('/api/' + studioId + '/secenekler');
+  if (!S.design[studioId]) S.design[studioId] = defaultsFor(spec, opts);
+  const d = S.design[studioId];
+
+  view.innerHTML = `
+    <h1>${esc(spec.title)}</h1>
+    <p class="lead">${esc(spec.lead)}</p>
+
+    ${opts.pngHazir ? '' : `<div class="notice warn">
+      Sistemde Chrome/Edge bulunamadi; PNG uretilemiyor. Tasarimi SVG olarak indirip
+      kendi aracinda PNG'ye cevirebilirsin.</div>`}
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Ayarlar</h2>
+        <form id="dform">${spec.fields.map((f) => designField(f, d, opts)).join('')}</form>
+        <div class="row">
+          <button type="button" class="btn" id="dgen">PNG uret</button>
+          <button type="button" class="ghost" id="dsvg">SVG indir</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Onizleme</h2>
+        <div id="dprev" class="preview"><span class="dim">hazirlaniyor...</span></div>
+      </div>
+    </div>
+    <div id="dout"></div>`;
+
+  const form = document.getElementById('dform');
+  const onEdit = () => { collectDesign(studioId, spec); preview(); };
+  form.oninput = onEdit;
+  form.onchange = onEdit;
+  document.getElementById('dgen').onclick = () => generateDesign(studioId);
+  document.getElementById('dsvg').onclick = downloadSvg;
+  preview();
+
+  async function preview() {
+    const r = await api('/api/' + studioId + '/onizleme', { design: S.design[studioId] });
+    const box = document.getElementById('dprev');
+    box.innerHTML = r.svg;
+    const svg = box.querySelector('svg');
+    if (svg) {
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+    }
+    box.dataset.svg = r.svg;
+  }
+
+  function downloadSvg() {
+    const box = document.getElementById('dprev');
+    const blob = new Blob([box.dataset.svg || ''], { type: 'image/svg+xml' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = studioId + '-' + Date.now() + '.svg';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+}
+
+function defaultsFor(spec, opts) {
+  const d = {};
+  for (const f of spec.fields) {
+    if (f.type === 'select') d[f.key] = ((opts[f.from] || [])[0] || {}).key;
+    else if (f.type === 'lines') d[f.key] = (f.placeholder || '').split('\n');
+    else d[f.key] = '';
+  }
+  return d;
+}
+
+function designField(f, d, opts) {
+  if (f.type === 'select') {
+    const list = opts[f.from] || [];
+    const cur = list.find((o) => o.key === d[f.key]) || {};
+    return `<div class="field"><label>${esc(f.label)}</label>
+      <select data-d="${esc(f.key)}">${list.map((o) =>
+        `<option value="${esc(o.key)}" ${d[f.key] === o.key ? 'selected' : ''}>${esc(o.label)}${o.w ? ' (' + o.w + 'x' + o.h + ')' : ''}</option>`).join('')}</select>
+      ${cur.hint ? `<p class="help">${esc(cur.hint)}</p>` : ''}</div>`;
+  }
+  if (f.type === 'lines') {
+    return `<div class="field"><label>${esc(f.label)}</label>
+      <textarea data-d="${esc(f.key)}" rows="${f.rows || 4}">${esc((d[f.key] || []).join('\n'))}</textarea></div>`;
+  }
+  return `<div class="field"><label>${esc(f.label)}</label>
+    <input data-d="${esc(f.key)}" value="${esc(d[f.key] || '')}" placeholder="${esc(f.placeholder || '')}"></div>`;
+}
+
+function collectDesign(studioId, spec) {
+  const d = S.design[studioId] || {};
+  document.querySelectorAll('[data-d]').forEach((el) => {
+    const f = spec.fields.find((x) => x.key === el.dataset.d);
+    d[el.dataset.d] = (f && f.type === 'lines')
+      ? el.value.split('\n').map((x) => x.trim()).filter(Boolean)
+      : el.value;
+  });
+  S.design[studioId] = d;
+}
+
+async function generateDesign(studioId) {
+  const btn = document.getElementById('dgen');
+  const out = document.getElementById('dout');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>uretiliyor';
+  out.innerHTML = '';
+  try {
+    const body = { design: S.design[studioId] };
+    if (studioId === 'etsy' && S.listing) body.listing = S.listing;
+    const r = await api('/api/' + studioId + '/uret', body);
+    out.innerHTML = `<div class="card">
+      <h2>Hazir · ${r.size.w}x${r.size.h}${r.dpi ? ' @' + r.dpi + 'DPI' : ''}${r.transparent ? ' · seffaf' : ''}</h2>
+      <div class="gallery"><div class="shot">
+        <img src="${esc(r.image.url)}">
+        <div class="meta">${esc(r.image.category || '')}
+          <div class="row" style="margin-top:8px">
+            <a class="ghost tiny" style="text-decoration:none" href="${esc(r.image.url)}" download>Indir</a>
+          </div>
+        </div>
+      </div></div></div>`;
+    await refresh();
+    toast('Tasarim uretildi.', 'ok');
+  } catch (err) {
+    out.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+    toast(err.message.slice(0, 140), 'bad');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'PNG uret';
+  }
+}
+
+async function renderEtsyListing() {
+  if (!S.listing) S.listing = { phrase: '', niche: '', size: 'tisort', audience: '', keywords: [] };
+  const l = S.listing;
+  view.innerHTML = `
+    <h1>Etsy listeleme metni</h1>
+    <p class="lead">Etsy aramasi baslik ve etiketlerde yasiyor; cogu satici tam burada kaybediyor.
+    Sifir API, tamamen yerel. Arastirmandan gelen anahtar kelimeleri ekle, gerisini kurar.</p>
+    <div class="card">
+      <div class="grid3">
+        <div class="field"><label>Tasarimdaki soz</label><input id="l_phrase" value="${esc(l.phrase)}" placeholder="Powered By Coffee And Cat Hair"></div>
+        <div class="field"><label>Kategori / tema</label><input id="l_niche" value="${esc(l.niche)}" placeholder="cat lover"></div>
+        <div class="field"><label>Hedef kitle</label><input id="l_aud" value="${esc(l.audience)}" placeholder="for women"></div>
+      </div>
+      <div class="field"><label>Anahtar kelimeler (virgulle ayir)</label>
+        <input id="l_kw" value="${esc((l.keywords || []).join(', '))}" placeholder="cat mom, crazy cat lady"></div>
+      <div class="row"><button class="btn" id="lgo">Uret</button></div>
+    </div>
+    <div id="lout"></div>`;
+
+  document.getElementById('lgo').onclick = async () => {
+    S.listing = {
+      phrase: document.getElementById('l_phrase').value,
+      niche: document.getElementById('l_niche').value,
+      audience: document.getElementById('l_aud').value,
+      keywords: document.getElementById('l_kw').value.split(',').map((x) => x.trim()).filter(Boolean),
+      size: (S.design.etsy || {}).size || 'tisort',
+    };
+    try {
+      const r = await api('/api/etsy/listeleme', { listing: S.listing });
+      document.getElementById('lout').innerHTML = `
+        ${r.warnings.map((w) => `<div class="notice warn">${esc(w)}</div>`).join('')}
+        <div class="card">
+          <div class="field"><label>Baslik (${r.titleLength}/${r.limits.title})</label>
+            <div class="core">${esc(r.title)}</div>
+            <div class="row" style="margin-top:8px"><button class="ghost tiny" data-c="t">Kopyala</button></div></div>
+          <div class="field"><label>Etiketler (${r.tagCount}/${r.limits.tagCount})</label>
+            <div>${r.tags.map((t) => `<span class="pill">${esc(t)}</span>`).join('')}</div>
+            <div class="row" style="margin-top:8px"><button class="ghost tiny" data-c="g">Kopyala</button></div></div>
+          <div class="field"><label>Aciklama</label>
+            <div class="core" style="max-height:220px;overflow:auto">${esc(r.description)}</div>
+            <div class="row" style="margin-top:8px"><button class="ghost tiny" data-c="a">Kopyala</button></div></div>
+        </div>`;
+      document.querySelector('[data-c="t"]').onclick = () => copy(r.title);
+      document.querySelector('[data-c="g"]').onclick = () => copy(r.tags.join(', '));
+      document.querySelector('[data-c="a"]').onclick = () => copy(r.description);
+    } catch (err) {
+      toast(err.message, 'bad');
+    }
+  };
+}
+
+function renderStudioArchive(studioId) {
+  const items = (S.status.gallery || []).filter((g) => g.studio === studioId);
+  view.innerHTML = `
+    <h1>Arsiv</h1>
+    <p class="lead">Bu studyoda uretilen tasarimlar.</p>
+    ${items.length ? `<div class="gallery">${items.map((i) => `
+      <div class="shot"><img src="${esc(i.url)}" loading="lazy">
+        <div class="meta">${esc(i.category || '')}<br>${new Date(i.createdAt).toLocaleString('tr-TR')}
+          <div class="row" style="margin-top:8px">
+            <a class="ghost tiny" style="text-decoration:none" href="${esc(i.url)}" download>Indir</a>
+          </div>
+        </div></div>`).join('')}</div>`
+      : '<div class="empty">Henuz tasarim yok.</div>'}`;
 }
 
 /* ---------------------------------------------------------------- gallery */

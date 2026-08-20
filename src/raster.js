@@ -1,7 +1,9 @@
 'use strict';
 
 /**
- * SVG -> SEFFAF PNG (4500x5400 @300DPI)
+ * ORTAK RASTERIZE MOTORU: SVG/HTML -> PNG
+ *
+ * Etsy POD studyosu ve Reklam studyosu ikisi de bunu kullanir.
  *
  * Bagimlilik eklemeden rasterize etmek icin sistemde ZATEN KURULU olan
  * Chrome/Edge'i bassiz modda kullaniyoruz. Kurulum, indirme, npm paketi yok.
@@ -38,8 +40,8 @@ function available() {
   return !!findBrowser();
 }
 
-/** SVG metnini seffaf PNG buffer'ina cevirir. */
-function svgToPng(svg, width, height) {
+/** SVG/HTML metnini PNG buffer'ina cevirir. options.background verilmezse SEFFAF. */
+function svgToPng(svg, width, height, options = {}) {
   return new Promise((resolve, reject) => {
     const browser = findBrowser();
     if (!browser) {
@@ -52,16 +54,17 @@ function svgToPng(svg, width, height) {
     const htmlPath = path.join(dir, 'd.html');
     const outPath = path.join(dir, 'd.png');
     // Kenar boslugu ve kaydirma cubugu olmadan tam kadraj
+    const bg = options.background || 'transparent';
     fs.writeFileSync(htmlPath,
       `<!doctype html><meta charset="utf-8">
-       <style>html,body{margin:0;padding:0;background:transparent;overflow:hidden}
+       <style>html,body{margin:0;padding:0;background:${bg};overflow:hidden}
        svg{display:block}</style>${svg}`, 'utf8');
 
     execFile(browser, [
       '--headless=new',
       '--disable-gpu',
       '--hide-scrollbars',
-      '--default-background-color=00000000',
+      `--default-background-color=${options.background ? 'ffffffff' : '00000000'}`,
       `--screenshot=${outPath}`,
       `--window-size=${width},${height}`,
       `file:///${htmlPath.split(String.fromCharCode(92)).join('/')}`,

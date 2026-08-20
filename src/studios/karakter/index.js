@@ -14,7 +14,7 @@
  */
 module.exports = {
   id: 'karakter',
-  label: 'Karakter Studyosu',
+  label: 'AI Influencer',
   icon: '🧬',
   tagline: 'Sifirdan bir insan yarat, kimligini kilitle, her karede ayni kisiyi uret.',
   needsProvider: true,

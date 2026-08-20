@@ -22,8 +22,9 @@
 
 const karakter = require('./karakter');
 const etsy = require('./etsy');
+const reklam = require('./reklam');
 
-const REGISTRY = [karakter, etsy];
+const REGISTRY = [karakter, etsy, reklam];
 
 function list() {
   return REGISTRY.map((s) => ({
