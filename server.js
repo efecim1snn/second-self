@@ -27,6 +27,7 @@ const brief = require('./src/brief');
 const welcome = require('./src/welcome');
 const providers = require('./src/providers');
 const upscalers = require('./src/upscalers');
+const studios = require('./src/studios');
 
 const PORT = Number(process.env.PORT || 4200);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -294,10 +295,22 @@ const routes = {
       reference: character ? reference.status(character) : null,
       risks: character ? traits.risks(character.identity.distinctive) : [],
       app: store.getAppState(),
+      studios: studios.list(),
+      activeStudio: store.getAppState().activeStudio || 'karakter',
     };
   },
 
   /* --------------------------------------------------- karsilama (bir kez) */
+
+  'GET /api/studyolar': async () => ({
+    studios: studios.list(),
+    active: store.getAppState().activeStudio || 'karakter',
+  }),
+
+  'POST /api/studyolar/aktif': async (body) => {
+    const spec = studios.get(body.id);
+    return { state: store.saveAppState({ activeStudio: spec.id }), active: spec.id };
+  },
 
   'GET /api/karsilama': async () => ({
     welcome: welcome.WELCOME,
@@ -787,6 +800,9 @@ function answersFromCharacter(character) {
     hometownCity: hometownCity || '',
   };
 }
+
+// Studyolar kendi rotalarini kendi klasorlerinde tasir; burada tabloya karisir.
+Object.assign(routes, studios.routes());
 
 function isConfigured(spec, config) {
   if (spec.id === 'manual') return true;
