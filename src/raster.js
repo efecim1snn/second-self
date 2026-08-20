@@ -40,6 +40,91 @@ function available() {
   return !!findBrowser();
 }
 
+/* --------------------------------------------------------- glif olcumu */
+
+/**
+ * YAZI GENISLIGINI TAHMIN ETME - OLC
+ *
+ * Sorun: design.js metnin ne kadar yer kaplayacagini tek bir sabitle
+ * tahmin ediyordu (`karakterSayisi * 0.58`). Hicbir yazi tipinde bu dogru
+ * degil - olculdu: Courier New 0.60 (sabit), Arial Black 0.64-0.94,
+ * Georgia 0.66-1.02, Segoe Script 0.31-1.00. Yani 0.58 en dar gercek
+ * durumdan bile dusuk; program her seferinde gerekenden BUYUK punto
+ * seciyor ve harfler baski dosyasinin disinda kaliyordu.
+ *
+ * Cozum: bassiz Chrome'a her yazi tipinin her harfinin gercek genisligini
+ * BIR KEZ olcturuyoruz, sonuc data/glif-tablo.json'a yaziliyor. Sonrasi
+ * saf toplama - onizlemede tarayici hic calismaz, yazarken yavaslama olmaz.
+ *
+ * Cikti: { ' ': 0.31, 'A': 0.72, ... } em cinsinden ilerleme genisligi.
+ */
+
+const OLCULECEK = (() => {
+  const harfler = [];
+  for (let c = 32; c <= 126; c++) harfler.push(String.fromCharCode(c));
+  // Turkce ve yaygin aksanli harfler - kullanici bunlari da yazabiliyor.
+  for (const ek of 'ÇĞİIÖŞÜçğıöşüÄÖÜäöüßÁÉÍÓÚáéíóúÑñÂÊÎÔÛâêîôû') {
+    if (!harfler.includes(ek)) harfler.push(ek);
+  }
+  return harfler;
+})();
+
+function measureGlyphs(fontFamily, weight = 400, timeoutMs = 60000) {
+  return new Promise((resolve, reject) => {
+    const browser = findBrowser();
+    if (!browser) return reject(new Error('Olcum icin Chrome/Edge bulunamadi.'));
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'glif-'));
+    const htmlPath = path.join(dir, 'm.html');
+
+    // Canvas measureText gercek ilerleme genisligini (advance width) verir -
+    // getBBox'un aksine harfler arasi bosluk da dahildir, bizim istedigimiz bu.
+    const html = `<!doctype html><meta charset="utf-8"><body><pre id="o"></pre><script>
+      var HARFLER = ${JSON.stringify(OLCULECEK)};
+      var BOY = 100;
+      var c = document.createElement('canvas').getContext('2d');
+      c.font = ${JSON.stringify('%WEIGHT% ' + 'BOYpx ' + '%FAMILY%')}
+        .replace('BOY', BOY);
+      var out = {};
+      for (var i = 0; i < HARFLER.length; i++) {
+        out[HARFLER[i]] = Math.round(c.measureText(HARFLER[i]).width / BOY * 10000) / 10000;
+      }
+      document.getElementById('o').textContent = 'GLIF_JSON:' + JSON.stringify(out) + ':GLIF_SON';
+    <\/script></body>`
+      .replace('%WEIGHT%', String(weight))
+      .replace('%FAMILY%', fontFamily);
+
+    fs.writeFileSync(htmlPath, html, 'utf8');
+
+    execFile(browser, [
+      '--headless=new',
+      '--disable-gpu',
+      '--dump-dom',
+      '--virtual-time-budget=3000',
+      `file:///${htmlPath.split(String.fromCharCode(92)).join('/')}`,
+    ], { timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 }, (err, stdout) => {
+      try {
+        const metin = String(stdout || '');
+        const bas = metin.indexOf('GLIF_JSON:');
+        const son = metin.indexOf(':GLIF_SON');
+        if (bas === -1 || son === -1) {
+          return reject(new Error('Olcum ciktisi okunamadi (tarayici DOM dokumedi).'));
+        }
+        const ham = metin.slice(bas + 'GLIF_JSON:'.length, son);
+        // DOM dokumu HTML kacislari icerebilir
+        const temiz = ham
+          .replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'");
+        resolve(JSON.parse(temiz));
+      } catch (e) {
+        reject(new Error(`Glif olcumu basarisiz: ${e.message}`));
+      } finally {
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+      }
+    });
+  });
+}
+
 /* ------------------------------------------------------------- PNG DPI */
 
 /**
@@ -184,4 +269,4 @@ function svgToPng(svg, width, height, options = {}) {
   });
 }
 
-module.exports = { svgToPng, available, findBrowser, setPngDpi, crc32 };
+module.exports = { svgToPng, available, findBrowser, setPngDpi, crc32, measureGlyphs };
