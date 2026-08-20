@@ -451,3 +451,34 @@ button.ghost.danger:hover { background: rgba(255,77,109,.1); }
   }
   .cmptable tr.notsatiri td::before { content: none; }
 }
+
+/* ------------------------------------------------ masaustu cikti klasoru */
+.exportbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(64,214,142,.3);
+  border-radius: 10px;
+  background: rgba(64,214,142,.07);
+  color: #a9f0c8;
+  font-size: 13px;
+}
+.exportbar b { color: #fff; }
+.jobrow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  font-size: 13px;
+}
+.jobrow > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

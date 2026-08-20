@@ -10,6 +10,7 @@
  */
 
 const store = require('../../store');
+const output = require('../../output');
 const design = require('./design');
 const raster = require('../../raster');
 
@@ -63,7 +64,26 @@ module.exports = {
         isGolden: false,
       };
       store.addGalleryItem(item);
-      return { image: item, size };
+
+      let job = null;
+      try {
+        job = output.createJobFolder({ studio: 'reklam', title: d.line1 || d.headline || 'gorsel' });
+        if (job) {
+          output.writeImage(job, buffer, { index: 1, ext: 'png', label: size.label });
+          output.writeText(job, 'bilgi.txt', [
+            'SECOND SELF - is ozeti',
+            '======================', '',
+            `Tarih  : ${new Date().toLocaleString('tr-TR')}`,
+            'Studyo : Reklam / Grafik Tasarim',
+            `Olcu   : ${size.w}x${size.h} (${size.label})`,
+            'Zemin  : opak (sosyal medyada siyah cikmasin diye)',
+          ].join('\n'));
+        }
+      } catch (err) {
+        console.error('[cikti] Reklam klasoru yazilamadi:', err.message);
+      }
+
+      return { image: item, size, export: job ? { name: job.name, path: job.path } : null };
     },
   },
 };

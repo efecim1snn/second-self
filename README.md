@@ -269,6 +269,43 @@ Listede olmayan bir platform kullanıyorsan (Higgsfield, Ideogram, Runware, kend
 bir Midjourney proxy'si) **Özel API** ile onu da bağlarsın; o zaman sadece platformun
 dokümanındaki adresi ve gövde şablonunu bir kez girmen gerekir.
 
+## Çıktılar nereye gidiyor?
+
+Her iş için masaüstünde **ayrı bir klasör** açılır. Görsel, prompt ve gönderi metni
+o klasörde yan yana durur — aradığını bulmak için paneli açman gerekmez.
+
+```
+Masaüstü\Second Self\
+  2026-08-20 21-45 - AI Influencer - kahve reklamı\
+    01 - Sokak kombini.png
+    prompt.txt
+    metin-instagram.txt
+    bilgi.txt
+  2026-08-20 21-52 - Etsy POD - anne günü\
+    01 - Tişört hoodie.png
+    etsy-listeleme.txt
+    bilgi.txt
+  2026-08-20 22-03 - Reklam - açılış duyurusu\
+    01 - Instagram gönderi (4 5).png
+    bilgi.txt
+```
+
+**İç içe klasör açılmaz.** Her iş kökte, yan yana durur; stüdyo adı klasör adında zaten yazıyor.
+
+- `bilgi.txt` — tarih, stüdyo, karakter, sağlayıcı, ölçü ve **yüz referansının gönderilip
+  gönderilmediği** (gönderilmediyse nedeni ve ne yapman gerektiği)
+- `prompt.txt` — kullanılan prompt, negatif prompt, seed, model dili
+- `metin-<platform>.txt` — o iş için üretilen gönderi metni varyantları
+- `etsy-listeleme.txt` — başlık, 13 etiket, açıklama
+
+**Ayarlar → Masaüstü çıktı klasörü**'nden kapatabilir ya da başka bir yere alabilirsin.
+Sistem klasörleri (Windows, Program Files) ve sürücü kökü kabul edilmez.
+
+`data/` klasörü eskisi gibi çalışmaya devam eder — bu ona **ek**, yerine geçmez.
+Galeri, vesikalık zinciri ve referans seçimi hep `data/`yi kullanır.
+
+---
+
 ## Görsel üretim platformunu bağlama
 
 **Ayarlar → Görsel üretim sağlayıcısı**

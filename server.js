@@ -26,6 +26,7 @@ const reference = require('./src/reference');
 const brief = require('./src/brief');
 const welcome = require('./src/welcome');
 const caption = require('./src/caption');
+const output = require('./src/output');
 const providers = require('./src/providers');
 const upscalers = require('./src/upscalers');
 const studios = require('./src/studios');
@@ -247,6 +248,20 @@ async function generateScene(character, scene, count = 1) {
   const upSpec = upscalers.get(upCfg.active || 'none');
   const upConf = (upCfg.entries && upCfg.entries[upSpec.id]) || {};
 
+  // MASAUSTU CIKTI KLASORU: bu isin tum ciktilari kendi klasorune de yazilir.
+  // data/ altindaki yigin degismez - burasi ONA EK.
+  let job = null;
+  try {
+    job = output.createJobFolder({
+      studio: 'karakter',
+      title: scene.request || scene.categoryLabel || scene.category || 'uretim',
+    });
+  } catch (err) {
+    // Cikti klasoru acilamazsa URETIMI DURDURMA - kullanicinin karesi
+    // data/ altinda zaten guvende.
+    console.error('[cikti] klasor acilamadi:', err.message);
+  }
+
   const saved = [];
   for (const image of result.images || []) {
     let out = image;
@@ -289,6 +304,52 @@ async function generateScene(character, scene, count = 1) {
     };
     store.addGalleryItem(item);
     saved.push(item);
+
+    if (job) {
+      try {
+        output.writeImage(job, image2.buffer, {
+          index: saved.length,
+          ext,
+          label: scene.categoryLabel || scene.category || '',
+        });
+      } catch (err) {
+        console.error('[cikti] gorsel yazilamadi:', err.message);
+      }
+    }
+  }
+
+  if (job && saved.length) {
+    try {
+      output.writeText(job, 'prompt.txt', [
+        'PROMPT', '------', built.prompt, '',
+        'NEGATIF PROMPT', '--------------', built.negative || '(yok)', '',
+        'TEKNIK', '------',
+        `Saglayici : ${spec.label}`,
+        `Model dili: ${built.dialectLabel || dialect}`,
+        `Olcu      : ${built.width}x${built.height}`,
+        `Seed      : ${built.seed != null ? built.seed : '(bu platform seed desteklemiyor)'}`,
+      ].join('\n'));
+
+      output.writeText(job, 'bilgi.txt', [
+        'SECOND SELF - is ozeti',
+        '======================', '',
+        `Tarih     : ${new Date().toLocaleString('tr-TR')}`,
+        'Studyo    : AI Influencer',
+        `Is        : ${scene.request || scene.categoryLabel || scene.category || '-'}`,
+        `Karakter  : ${character.identity.name} (@${character.identity.handle})`,
+        `Saglayici : ${spec.label}`,
+        `Gorsel    : ${saved.length} adet`,
+        `Sure      : ${((Date.now() - started) / 1000).toFixed(1)} sn`, '',
+        'YUZ REFERANSI',
+        '-------------',
+        referenceLive
+          ? `Gonderildi (${refPayload.referenceFile})`
+          : `GONDERILMEDI - ${refState.reason || 'vesikalik karesi yok'}`,
+        referenceLive ? '' : (refState.fix ? `Yapilacak: ${refState.fix}` : ''),
+      ].filter((x) => x !== null).join('\n'));
+    } catch (err) {
+      console.error('[cikti] not yazilamadi:', err.message);
+    }
   }
 
   return {
@@ -296,6 +357,7 @@ async function generateScene(character, scene, count = 1) {
     built,
     spec,
     tookMs: Date.now() - started,
+    export: job ? { name: job.name, path: job.path, root: job.root } : null,
     // Teshis: kare referansli mi uretildi, degilse NEDEN? Panel bunu
     // sonucun ustunde gosteriyor - sessiz basarisizlik kalmasin.
     reference: {
@@ -577,11 +639,55 @@ const routes = {
   'POST /api/metin': async (body) => {
     const character = store.getCharacter();
     if (!character) throw notFound('Once karakter yarat.');
-    return caption.build(character, body.scene || {}, {
+    const out = caption.build(character, body.scene || {}, {
       platform: body.platform,
       variants: body.variants,
       aiLabel: body.aiLabel,
     });
+
+    // Metin, gorselin yazildigi ISIN KLASORUNE gider. Panel son uretimin
+    // klasor adini gonderiyor; yoksa metin icin kendi klasoru acilir.
+    let job = null;
+    try {
+      job = body.exportTo
+        ? output.reuseJobFolder(body.exportTo)
+        : output.createJobFolder({
+          studio: 'karakter',
+          title: `metin - ${(body.scene && (body.scene.request || body.scene.categoryLabel)) || out.platformLabel}`,
+        });
+      if (job) {
+        output.writeText(job, `metin-${out.platform}.txt`, [
+          `${out.platformLabel} icin gonderi metni`,
+          '='.repeat(40), '',
+          ...out.variants.map((v, i) => [
+            `--- VARYANT ${i + 1} (${v.chars}/${v.max} karakter) ---`,
+            v.text, '',
+          ].join('\n')),
+          out.aiNote,
+        ].join('\n'));
+      }
+    } catch (err) {
+      console.error('[cikti] metin yazilamadi:', err.message);
+    }
+
+    return { ...out, export: job ? { name: job.name, path: job.path } : null };
+  },
+
+  /* ------------------------------------------------- masaustu cikti ayari */
+
+  'GET /api/cikti': async () => ({
+    config: output.getConfig(),
+    jobs: output.listJobs(20),
+  }),
+
+  'POST /api/cikti': async (body) => ({
+    config: output.saveConfig({ enabled: body.enabled, root: body.root }),
+    jobs: output.listJobs(20),
+  }),
+
+  'POST /api/cikti/ac': async (body) => {
+    const acilan = output.openFolder(body.path || undefined);
+    return { opened: acilan };
   },
 
   'GET /api/metin/platformlar': async () => ({ platforms: caption.platforms() }),
@@ -620,6 +726,7 @@ const routes = {
       tookMs: out.tookMs,
       referenceMissing: !reference.status(character).complete,
       reference: out.reference,
+      export: out.export,
     };
   },
 
@@ -670,6 +777,7 @@ const routes = {
       status: reference.status(fresh),
       tookMs: out.tookMs,
       reference: out.reference,
+      export: out.export,
     };
   },
 

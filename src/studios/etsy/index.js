@@ -16,6 +16,7 @@
  */
 
 const store = require('../../store');
+const output = require('../../output');
 const design = require('./design');
 const listing = require('./listing');
 const render = require('../../raster');
@@ -71,6 +72,7 @@ module.exports = {
       }
 
       const file = store.saveImageBuffer(buffer, 'png');
+      const listeleme = body.listing ? listing.build(body.listing) : null;
       const item = {
         id: file.id,
         filename: file.filename,
@@ -79,11 +81,46 @@ module.exports = {
         studio: 'etsy',
         category: `POD · ${size.label} · ${size.w}x${size.h}`,
         design: d,
-        listing: body.listing ? listing.build(body.listing) : null,
+        listing: listeleme,
         isGolden: false,
       };
       store.addGalleryItem(item);
-      return { image: item, size, dpi: 300, transparent: true };
+
+      // Masaustunde bu tasarima ait kendi klasoru.
+      let job = null;
+      try {
+        job = output.createJobFolder({ studio: 'etsy', title: d.line1 || d.word || 'tasarim' });
+        if (job) {
+          output.writeImage(job, buffer, { index: 1, ext: 'png', label: size.label });
+          output.writeText(job, 'bilgi.txt', [
+            'SECOND SELF - is ozeti',
+            '======================', '',
+            `Tarih  : ${new Date().toLocaleString('tr-TR')}`,
+            'Studyo : Etsy POD',
+            `Olcu   : ${size.w}x${size.h} @300DPI (${size.label})`,
+            'Zemin  : seffaf PNG',
+          ].join('\n'));
+          if (listeleme) {
+            output.writeText(job, 'etsy-listeleme.txt', [
+              'ETSY LISTELEME METNI',
+              '====================', '',
+              `BASLIK (${(listeleme.title || '').length}/140)`,
+              '-------',
+              listeleme.title || '', '',
+              `ETIKETLER (${(listeleme.tags || []).length}/13)`,
+              '----------',
+              (listeleme.tags || []).join(', '), '',
+              'ACIKLAMA',
+              '--------',
+              listeleme.description || '',
+            ].join('\n'));
+          }
+        }
+      } catch (err) {
+        console.error('[cikti] Etsy klasoru yazilamadi:', err.message);
+      }
+
+      return { image: item, size, dpi: 300, transparent: true, export: job ? { name: job.name, path: job.path } : null };
     },
 
     'POST /listeleme': async (body) => {

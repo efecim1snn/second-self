@@ -18,6 +18,8 @@ const S = {
   design: {},      // etsy/reklam tasarim formu
   upscaler: undefined, // undefined = henuz sorulmadi, null = bagli arac yok
   captionPlatform: 'instagram',
+  cikti: null,        // masaustu cikti ayari
+  sonKlasor: null,    // son uretimin is klasoru adi (metin oraya yazilsin diye)
   busy: false,
 };
 
@@ -1066,7 +1068,10 @@ async function renderProduction() {
           platform: S.captionPlatform,
           variants: 3,
           aiLabel: document.getElementById('f_ailabel').checked,
+          // Bu oturumda gorsel uretildiyse metin ONUN klasorune yazilir.
+          exportTo: S.sonKlasor || undefined,
         });
+        if (data.export) S.sonKlasor = data.export.name;
         renderCaptions(box, data);
       } catch (err) {
         box.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
@@ -1148,7 +1153,10 @@ async function generate(scene) {
 
   try {
     const data = await api('/api/uret', { scene, count });
+    // Metin de ayni isin klasorune yazilsin diye hatirla.
+    S.sonKlasor = data.export ? data.export.name : null;
     out.innerHTML = `
+      ${exportBar(data.export)}
       <div class="card">
         <h2>Uretildi · ${data.images.length} gorsel · ${(data.tookMs / 1000).toFixed(1)} sn</h2>
         <p class="help">Kaynak: ${esc(data.provider.label)} · seed ${data.prompt.seed != null ? data.prompt.seed : 'yok'}</p>
@@ -1513,6 +1521,28 @@ function renderStudioArchive(studioId) {
   });
 }
 
+/* ---------------------------------------------------- masaustu cikti klasoru */
+
+/** Uretim sonucunun altinda "su klasore yazildi" seridi. */
+function exportBar(exp) {
+  if (!exp || !exp.name) return '';
+  return `<div class="exportbar">
+    <span>📁 Masaustunde <b>${esc(exp.name)}</b> klasorune yazildi</span>
+    <button class="ghost tiny" data-openfolder="${esc(exp.name)}">Klasoru ac</button>
+  </div>`;
+}
+
+// Klasor acma butonlari - olay devri, her render'da yeniden baglanmasin.
+view.addEventListener('click', async (e) => {
+  const b = e.target.closest && e.target.closest('[data-openfolder]');
+  if (!b) return;
+  try {
+    await api('/api/cikti/ac', { path: b.dataset.openfolder });
+  } catch (err) {
+    toast(err.message, 'bad');
+  }
+});
+
 /* ------------------------------------------------------------ gonderi metni */
 
 // Panelin bildigi sosyal platformlar. src/caption.js PLATFORMS ile ayni sira.
@@ -1531,6 +1561,7 @@ const CAPTION_PLATFORMS = [
 function renderCaptions(box, data) {
   box.innerHTML = `
     <hr class="sep">
+    ${exportBar(data.export)}
     <p class="help">${esc(data.platformLabel)} · ${esc(data.platformNote || '')}</p>
     ${data.variants.map((v, i) => `
       <div class="card" style="margin-bottom:10px">
@@ -1827,6 +1858,30 @@ function renderSettings() {
     </div>
 
     <div class="card">
+      <h2>Masaustu cikti klasoru</h2>
+      <p class="help">Her is icin masaustunde <b>ayri bir klasor</b> acilir; gorsel, prompt ve
+      metin o klasorde yan yana durur. Ic ice klasor acilmaz - her is kokte, yan yana.
+      <span class="dim">(<span class="mono">data/</span> klasoru eskisi gibi calismaya devam eder,
+      burasi ona ek.)</span></p>
+      <div class="field">
+        <label style="display:flex;gap:8px;align-items:center">
+          <input type="checkbox" id="ciktiacik" style="width:auto"> Masaustune klasor ac
+        </label>
+      </div>
+      <div class="field">
+        <label>Klasorun yeri</label>
+        <input id="ciktikok" spellcheck="false">
+        <p class="help" id="ciktinot"></p>
+      </div>
+      <div class="row">
+        <button class="btn" id="ciktikaydet">Kaydet</button>
+        <button class="ghost" data-openfolder="">Klasoru ac</button>
+        <button class="ghost" id="ciktivarsayilan">Varsayilana don</button>
+      </div>
+      <div id="ciktilist"></div>
+    </div>
+
+    <div class="card">
       <h2>Buyutme (upscale)</h2>
       <p class="help">Difuzyon modelleri ~1 MP'de egitiliyor; daha buyugunu zorlayinca anatomi bozuluyor.
       Herkesin yaptigi sey ayni: once uret, sonra buyut. Ucretsiz saglayici ~686x858 donduruyor,
@@ -1856,6 +1911,51 @@ function renderSettings() {
       <div class="row"><button class="danger ghost" id="wipe">TUM VERIYI SIL</button></div>
       <p class="help">Komut satirindan: <span class="mono">node reset.js --confirm</span></p>
     </div>`;
+
+  // --- masaustu cikti klasoru ---
+  (async () => {
+    const acik = document.getElementById('ciktiacik');
+    const kok = document.getElementById('ciktikok');
+    const not = document.getElementById('ciktinot');
+    const liste = document.getElementById('ciktilist');
+    if (!acik) return;
+
+    const ciz = (data) => {
+      S.cikti = data.config;
+      acik.checked = !!data.config.enabled;
+      kok.value = data.config.root;
+      not.innerHTML = data.config.desktopFound
+        ? `Varsayilan: <span class="mono">${esc(data.config.defaultRoot)}</span>`
+        : '<b>Masaustu bulunamadi</b> - ciktilar proje klasorune yaziliyor.';
+      liste.innerHTML = data.jobs && data.jobs.length
+        ? `<hr class="sep"><p class="help">Son isler:</p>${data.jobs.slice(0, 8).map((j) => `
+            <div class="jobrow">
+              <span>${esc(j.name)}</span>
+              <span class="dim">${j.files} dosya</span>
+              <button class="ghost tiny" data-openfolder="${esc(j.name)}">Ac</button>
+            </div>`).join('')}`
+        : '<hr class="sep"><p class="dim">Henuz is klasoru yok - ilk uretimde olusacak.</p>';
+    };
+
+    try { ciz(await api('/api/cikti')); } catch (err) { not.textContent = err.message; }
+
+    document.getElementById('ciktikaydet').onclick = async (e) => {
+      e.target.disabled = true;
+      try {
+        ciz(await api('/api/cikti', { enabled: acik.checked, root: kok.value }));
+        toast('Cikti klasoru kaydedildi.', 'ok');
+      } catch (err) {
+        toast(err.message, 'bad');
+      } finally { e.target.disabled = false; }
+    };
+
+    document.getElementById('ciktivarsayilan').onclick = async () => {
+      try {
+        ciz(await api('/api/cikti', { enabled: true, root: S.cikti.defaultRoot }));
+        toast('Varsayilana donuldu.', 'ok');
+      } catch (err) { toast(err.message, 'bad'); }
+    };
+  })();
 
   // Tablodaki "Sec" butonu MEVCUT akisi kullanir: select'i degistirip
   // onun onchange'ini tetikler. Boylece tek bir kod yolu kalir.
