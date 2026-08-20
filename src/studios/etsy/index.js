@@ -89,7 +89,9 @@ module.exports = {
       // Masaustunde bu tasarima ait kendi klasoru.
       let job = null;
       try {
-        job = output.createJobFolder({ studio: 'etsy', title: d.line1 || d.word || 'tasarim' });
+        // Tasarim metni `lines` dizisinde geliyor (STUDIO_FORMS.etsy.fields).
+        const ilkSatir = Array.isArray(d.lines) ? d.lines.find(Boolean) : d.lines;
+        job = output.createJobFolder({ studio: 'etsy', title: ilkSatir || 'tasarim' });
         if (job) {
           output.writeImage(job, buffer, { index: 1, ext: 'png', label: size.label });
           output.writeText(job, 'bilgi.txt', [
