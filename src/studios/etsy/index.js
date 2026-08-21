@@ -24,6 +24,23 @@ const mockup = require('./mockup');
 const pazar = require('./pazar');
 const render = require('../../raster');
 
+/**
+ * BASKI OLCUSU -> MOCKUP URUNU
+ * Ilk surumde mockup urunu ile baski olcusu birbirinden bagimsizdi:
+ * "kupa" listeleme gorseli dikey tisort baskisini gosterebiliyordu.
+ */
+const MOCKUP_ESLEME = {
+  tisort: 'tisort',
+  gogus: 'tisort',
+  hoodieArka: 'tisort',
+  kare: 'canta',
+  kupa: 'kupa',
+  poster: 'poster',
+  posterBuyuk: 'poster',
+  sticker: 'poster',
+  telefon: 'poster',
+};
+
 /** Etsy listeleme metnini dosyaya yazilacak bicime cevirir. */
 function listelemeMetni(l, size) {
   if (!l) return '';
@@ -255,9 +272,12 @@ module.exports = {
      */
     'POST /toplu': async (body) => {
       const temel = body.design || {};
+      // TOPLU_VARSAYILAN kodda yaziliydi ama HIC CAGRILMIYORDU: varsayilan
+      // Object.keys(SIZES) idi ve olcu sayisi 4'ten 9'a cikinca buton
+      // "4 urunde birden" deyip 9 dosya uretmeye basladi.
       const olculer = Array.isArray(body.sizes) && body.sizes.length
         ? body.sizes.filter((s) => design.SIZES[s])
-        : Object.keys(design.SIZES);
+        : design.TOPLU_VARSAYILAN;
       if (!olculer.length) throw badRequest('Gecerli urun olcusu secilmedi.');
       if (!render.available()) {
         const e = new Error('PNG uretimi icin sistemde Chrome/Edge bulunamadi.');
@@ -295,10 +315,42 @@ module.exports = {
 
           if (job) {
             sira += 1;
-            output.writeImage(job, buffer, { index: sira, ext: 'png', label: size.label });
+            output.writeImage(job, buffer, { index: sira, ext: 'png', label: `BASKI ${size.label}` });
             output.writeText(job, `etsy-listeleme - ${size.label}.txt`, listelemeMetni(listeleme, size));
           }
-          sonuclar.push({ size: olcu, image: item, listing: listeleme });
+
+          /* LISTELEME GORSELI DE URETILIYOR.
+           * Ilk surumde toplu uretim yalnizca BASKI dosyasi cikariyordu -
+           * yani en cok kullanilacak yol, alicinin gorecegi kareyi hic
+           * uretmiyordu. Urun mockup'i baski olcusune BAGLI seciliyor:
+           * kupa olcusu kupa mockup'ina, poster postere.
+           */
+          let mockupItem = null;
+          if (job && render.available()) {
+            try {
+              const mUrun = MOCKUP_ESLEME[olcu] || 'tisort';
+              const mSvg = mockup.toSvg(d, { urun: mUrun, renk: body.mockupRenk || 'siyah' });
+              const mBuf = await render.svgToPng(mSvg, mockup.BOYUT, mockup.BOYUT, { background: '#ffffff' });
+              const mFile = store.saveImageBuffer(mBuf, 'png');
+              mockupItem = {
+                id: mFile.id,
+                filename: mFile.filename,
+                url: mFile.url,
+                createdAt: new Date().toISOString(),
+                studio: 'etsy',
+                category: `Listeleme gorseli · ${mUrun}`,
+                design: d,
+                isGolden: false,
+              };
+              store.addGalleryItem(mockupItem);
+              sira += 1;
+              output.writeImage(job, mBuf, { index: sira, ext: 'png', label: `LISTELEME ${mUrun}` });
+            } catch (err) {
+              console.error('[etsy] listeleme gorseli uretilemedi:', err.message);
+            }
+          }
+
+          sonuclar.push({ size: olcu, image: item, listing: listeleme, mockup: mockupItem });
         } catch (err) {
           hatalar.push({ size: olcu, hata: err.message });
         }
@@ -362,10 +414,10 @@ module.exports = {
         + 'POD saglayicinin kendi mockup uretecini kullanman gerekir (Printful/Printify bunu ucretsiz veriyor).',
     }),
 
-    'POST /mockup/onizleme': async (body) => ({
-      svg: mockup.toSvg(body.design || {}, { urun: body.urun, renk: body.renk }),
-      boyut: mockup.BOYUT,
-    }),
+    'POST /mockup/onizleme': async (body) => {
+      const r = mockup.build(body.design || {}, { urun: body.urun, renk: body.renk });
+      return { svg: r.svg, kontrast: r.kontrast, boyut: mockup.BOYUT };
+    },
 
     /** Secilen renklerde listeleme gorselleri uretir ve klasore yazar. */
     'POST /mockup/uret': async (body) => {
@@ -384,9 +436,12 @@ module.exports = {
       const job = output.createJobFolder({ studio: 'etsy', title: `${ilkSatir || 'tasarim'} - listeleme gorseli` });
 
       const uretilen = [];
+      const duzeltmeler = [];
       let sira = 0;
       for (const renk of renkler) {
-        const svg = mockup.toSvg(d, { urun, renk });
+        const r = mockup.build(d, { urun, renk });
+        const svg = r.svg;
+        if (!r.kontrast.uygun) duzeltmeler.push(r.kontrast.mesaj);
         const buffer = await render.svgToPng(svg, mockup.BOYUT, mockup.BOYUT, { background: '#ffffff' });
         const file = store.saveImageBuffer(buffer, 'png');
         const item = {
@@ -422,13 +477,25 @@ module.exports = {
         ].join('\n'));
       }
 
-      return { gorseller: uretilen, export: job ? { name: job.name, path: job.path } : null };
+      return {
+        gorseller: uretilen,
+        duzeltmeler,
+        export: job ? { name: job.name, path: job.path } : null,
+      };
     },
 
     'POST /pdf': async (body) => {
       const d = body.design || {};
       const size = design.SIZES[d.size] || design.SIZES.tisort;
       const buffer = await render.svgToPdf(design.toSvg(d), size.w, size.h, { dpi: 300 });
+
+      /* PDF DISKE DE KAYDEDILIYOR.
+       * Ilk surumde PDF yalnizca masaustu klasorune yaziliyordu; cikti
+       * klasoru KAPALIYSA dosya hicbir yere yazilmiyor ama panel yine de
+       * "PDF hazir - X KB" diyordu. Artik data/ altina da kaydediliyor ve
+       * panel indirme baglantisi aliyor.
+       */
+      const kayit = store.saveImageBuffer(buffer, 'pdf');
 
       const ilkSatir = Array.isArray(d.lines) ? d.lines.find(Boolean) : d.lines;
       const job = output.createJobFolder({ studio: 'etsy', title: `${ilkSatir || 'tasarim'} - PDF` });
@@ -448,6 +515,7 @@ module.exports = {
       return {
         size,
         bytes: buffer.length,
+        url: kayit.url,
         export: job ? { name: job.name, path: job.path } : null,
         dosya,
       };

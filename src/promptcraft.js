@@ -5,7 +5,10 @@
  *
  * Kilitli kimlik + sahne -> her platformun kendi diline gore prompt.
  * Her uretimde ayni "fiziksel cekirdek" kelimesi kelimesine tekrarlanir;
- * tutarliligin %70'i budur. Kalan %30: sabit seed + referans gorsel.
+ * tutarliligi tasiyan ana arac budur; yaninda sabit seed ve (destekleyen
+ * platformlarda) referans gorsel calisir.
+ * NOT: buraya oran YAZMA - projede tutarliligi olcen kod yok, dolayisiyla
+ * herhangi bir yuzde uydurma olur.
  */
 
 /* ----------------------------------------------- TR -> EN sozluk (gorsel) */
@@ -312,7 +315,8 @@ const ASPECT = {
 /**
  * GENIS KADRAJDA YUZ ERIMESI
  *
- * Tam boy bir figurde yuz karenin ~%8'ini kaplar. 896x1120'de bu ~90 piksel;
+ * Tam boy bir figurde yuz karenin kucuk bir kismini kaplar - 896x1120'de
+ * yuz bolgesi birkac yuz piksele dusuyor;
  * VAE 8 kat kucultunce latent uzayda ~11 piksel kaliyor ve model orada goz,
  * burun, agiz uretemiyor - yuz eriyor. Cozum prompt degil, cozunurluk.
  * Genis kadrajda olcuyu buyutuyoruz.

@@ -96,6 +96,70 @@ function kupaParcalari(cx, cy, gen, boy) {
   };
 }
 
+/* ------------------------------------------------------------- kontrast */
+
+/**
+ * KONTRAST KILIDI
+ *
+ * Ilk surumde varsayilan kombinasyon siyah baskiyi siyah tisortun uzerine
+ * koyuyordu: WCAG bagil parlaklik orani 1.08 - yani tasarim fiilen GORUNMUYOR.
+ * Satici hicbir sey degistirmeden "uret" derse Etsy'ye bos bir siyah tisort
+ * yukluyor ve nedenini anlamiyor, cunku tasarim onizlemesi dogru gorunuyordu.
+ *
+ * Artik urun rengiyle baski rengi karsilastiriliyor; kontrast dusukse baski
+ * paleti otomatik ters cevriliyor ve BU DURUM BILDIRILIYOR (sessizce
+ * duzeltmek de yanlis olurdu - kullanici neyi degistirdigimizi bilmeli).
+ */
+
+/** WCAG bagil parlaklik (0 = siyah, 1 = beyaz). */
+function parlaklik(hex) {
+  const m = String(hex).replace('#', '');
+  const tam = m.length === 3 ? m.split('').map((c) => c + c).join('') : m;
+  const n = parseInt(tam, 16);
+  const kanal = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * kanal[0] + 0.7152 * kanal[1] + 0.0722 * kanal[2];
+}
+
+/** WCAG kontrast orani (1 = ayni renk, 21 = siyah/beyaz). */
+function kontrast(a, b) {
+  const l1 = parlaklik(a);
+  const l2 = parlaklik(b);
+  const [ust, alt] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (ust + 0.05) / (alt + 0.05);
+}
+
+/** Bu urun rengi icin uygun baski paleti. */
+const KOYU_URUN_PALETI = 'beyaz';
+const ACIK_URUN_PALETI = 'siyah';
+const ESIK = 3.0;   // altinda tasarim urunun uzerinde okunmuyor
+
+/**
+ * Tasarimin baski rengi bu urun renginin uzerinde okunuyor mu?
+ * Okunmuyorsa duzeltilmis paleti ve sebebini dondurur.
+ */
+function paletKontrol(d, renkAnahtar) {
+  const renk = RENKLER[renkAnahtar] || RENKLER.siyah;
+  const pal = design.PALETTES[d.palette] || design.PALETTES.siyah;
+  const oran = kontrast(pal.ink, renk.kumas);
+
+  if (oran >= ESIK) {
+    return { uygun: true, oran: Math.round(oran * 100) / 100, palette: d.palette, mesaj: null };
+  }
+
+  const yeni = parlaklik(renk.kumas) < 0.35 ? KOYU_URUN_PALETI : ACIK_URUN_PALETI;
+  const yeniOran = kontrast((design.PALETTES[yeni] || {}).ink, renk.kumas);
+  return {
+    uygun: false,
+    oran: Math.round(oran * 100) / 100,
+    palette: yeni,
+    mesaj: `${renk.label} urunde "${pal.label}" baski okunmuyor (kontrast ${oran.toFixed(2)}:1). `
+      + `Baski rengi "${(design.PALETTES[yeni] || {}).label}" olarak degistirildi (${yeniOran.toFixed(2)}:1).`,
+  };
+}
+
 /** Mockup icin deterministik id - ayni girdi ayni SVG. */
 function idFor(d, urun, renk) {
   const kaynak = JSON.stringify([d.lines, d.layout, d.font, d.palette, d.size, urun, renk]);
@@ -120,6 +184,10 @@ function toSvg(d, options = {}) {
   const renk = RENKLER[options.renk] || RENKLER.siyah;
   const B = BOYUT;
   const p = [];
+
+  // KONTRAST: baski urunun uzerinde okunmuyorsa palet duzeltilir.
+  const kont = paletKontrol(d, options.renk);
+  const tasarim = kont.uygun ? d : { ...d, palette: kont.palette };
 
   /* ID CAKISMASI
    * Ayni sayfada birden fazla mockup gosterilince (varyant seridi, dort
@@ -147,9 +215,9 @@ function toSvg(d, options = {}) {
 
   // Tasarimin SVG'si ic ice yerlestiriliyor: SVG bunu destekliyor, nested
   // <svg> kendi viewBox'iyla verilen kutuya olceklenir.
-  const tasarimSvg = design.toSvg(d);
+  const tasarimSvg = design.toSvg(tasarim);
   const govdesi = tasarimSvg.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
-  const olcu = design.SIZES[d.size] || design.SIZES.tisort;
+  const olcu = design.SIZES[tasarim.size] || design.SIZES.tisort;
   const ic = (x, y, w, h) => `<svg x="${x.toFixed(0)}" y="${y.toFixed(0)}" width="${w.toFixed(0)}" height="${h.toFixed(0)}"`
     + ` viewBox="0 0 ${olcu.w} ${olcu.h}" preserveAspectRatio="xMidYMid meet">${govdesi}</svg>`;
 
@@ -214,6 +282,15 @@ function golgele(hex, yuzde) {
   return `#${kanal.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
 }
 
+/**
+ * toSvg ile ayni ciktiyi verir ama YAPILAN DUZELTMEYI de dondurur.
+ * Panel/rota bunu kullanip kullaniciya soyluyor.
+ */
+function build(d, options = {}) {
+  const kont = paletKontrol(d, options.renk);
+  return { svg: toSvg(d, options), kontrast: kont };
+}
+
 function urunler() {
   return [
     { key: 'tisort', label: 'Tisort' },
@@ -227,4 +304,4 @@ function renkler() {
   return Object.entries(RENKLER).map(([key, v]) => ({ key, label: v.label, kumas: v.kumas }));
 }
 
-module.exports = { toSvg, urunler, renkler, RENKLER, BOYUT };
+module.exports = { toSvg, build, kontrast, paletKontrol, urunler, renkler, RENKLER, BOYUT, ESIK };

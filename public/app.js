@@ -1400,6 +1400,7 @@ async function renderStudioDesign(studioId) {
             <h2>PDF hazir · ${(r.bytes / 1024).toFixed(0)} KB</h2>
             <p class="help">${r.size.w}x${r.size.h} piksel = ${(r.size.w / 300).toFixed(2)}x${(r.size.h / 300).toFixed(2)} inc @300DPI.
             Vektor, yazi tipi gomulu.</p>
+            <div class="row"><a class="ghost tiny" href="${esc(r.url)}" download>PDF indir</a></div>
           </div>`;
       } catch (err) {
         out.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
@@ -1668,7 +1669,10 @@ async function mockupPaneli(studioId) {
       const r = await api('/api/etsy/mockup/onizleme', {
         design: S.design[studioId], urun: S.mockup.urun, renk: S.mockup.renkler[0],
       });
-      kutu.innerHTML = `<hr class="sep"><div class="mockonizleme">${r.svg}</div>`;
+      kutu.innerHTML = `<hr class="sep">
+        ${r.kontrast && !r.kontrast.uygun
+          ? `<div class="notice warn">${esc(r.kontrast.mesaj)}</div>` : ''}
+        <div class="mockonizleme">${r.svg}</div>`;
       const svg = kutu.querySelector('svg');
       if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.maxWidth = '100%'; svg.style.height = 'auto'; }
     } catch (err) {
@@ -1686,6 +1690,7 @@ async function mockupPaneli(studioId) {
         design: S.design[studioId], urun: S.mockup.urun, renkler: S.mockup.renkler,
       });
       kutu.innerHTML = `${exportBar(r.export)}
+        ${(r.duzeltmeler || []).map((m) => `<div class="notice warn">${esc(m)}</div>`).join('')}
         <div class="card">
           <h2>${r.gorseller.length} listeleme gorseli hazir</h2>
           <div class="gallery">${r.gorseller.map((g) => `
@@ -1723,7 +1728,8 @@ async function bulkDesign(studioId) {
         ${r.hatalar.map((h) => esc(h.size + ' - ' + h.hata)).join('<br>')}</div>` : ''}
       <div class="card">
         <h2>${r.sonuclar.length} urun hazir</h2>
-        <p class="help">Hepsi tek klasorde, her biri kendi Etsy listeleme metniyle.</p>
+        <p class="help">Her urun icin uc dosya: <b>baskiya hazir</b> + <b>listeleme gorseli</b>
+        + kendi Etsy metni. Hepsi tek klasorde.</p>
         <div class="gallery">${r.sonuclar.map((s) => `
           <div class="shot"><img src="${esc(s.image.url)}" loading="lazy">
             <div class="meta">${esc(s.image.category || '')}
