@@ -306,6 +306,21 @@ ve bunu sana söyler.
 
 Çıktı her üründe: **300 DPI + sRGB + şeffaf PNG**, güvenli baskı marjının içinde.
 
+### Listeleme görseli (mockup)
+
+Etsy'de satan şey **listeleme fotoğrafıdır**. Araç uzun süre yalnızca baskıya hazır
+şeffaf PNG üretti — o dosya baskıcıya gider, alıcının gördüğü şey değildir.
+
+Artık tasarımı ürünün üzerinde gösteren **2000×2000** listeleme görseli üretiyor:
+tişört, çanta (tote), kupa, çerçeveli poster · 6 ürün rengi · istediğin kadarını
+tek seferde.
+
+> **Bu bir fotoğraf değildir ve öyleymiş gibi sunulmaz.** Stok görsel kuralı gereği
+> ürün **vektörle çiziliyor** — tıpkı tasarımların kendisi gibi. Kumaş kıvrımı ve
+> gerçek doku yok; sade, temiz bir ürün katalog görünümü var. Gerçek fotoğraf isteyen
+> satıcı ürünü basıp çekmeli, ya da POD sağlayıcısının kendi mockup üretecini
+> kullanmalı (Printful/Printify bunu ücretsiz veriyor).
+
 ### Katman 2 — canlı Etsy verisi (kendi API anahtarın, ücretsiz)
 
 **Bu otomasyonun kendi Etsy anahtarı YOKTUR ve olmayacak.** Public bir depoda paylaşılan

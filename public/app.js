@@ -19,6 +19,7 @@ const S = {
   upscaler: undefined, // undefined = henuz sorulmadi, null = bagli arac yok
   captionPlatform: 'instagram',
   cikti: null,        // masaustu cikti ayari
+  mockup: null,       // listeleme gorseli ayari
   sonKlasor: null,    // son uretimin is klasoru adi (metin oraya yazilsin diye)
   busy: false,
 };
@@ -1329,6 +1330,7 @@ async function renderStudioDesign(studioId) {
         <div class="row">
           <button type="button" class="btn" id="dgen">PNG uret</button>
           ${studioId === 'etsy' ? '<button type="button" class="ghost" id="dtoplu">4 urunde birden uret</button>' : ''}
+          ${studioId === 'etsy' ? '<button type="button" class="ghost" id="dmockup">Listeleme gorseli</button>' : ''}
           ${studioId === 'etsy' ? '<button type="button" class="ghost" id="dpdf">PDF (vektor)</button>' : ''}
           <button type="button" class="ghost" id="dsvg">SVG indir</button>
         </div>
@@ -1380,6 +1382,9 @@ async function renderStudioDesign(studioId) {
 
   const toplu = document.getElementById('dtoplu');
   if (toplu) toplu.onclick = () => bulkDesign(studioId);
+
+  const mockupBtn = document.getElementById('dmockup');
+  if (mockupBtn) mockupBtn.onclick = () => mockupPaneli(studioId);
 
   const pdfBtn = document.getElementById('dpdf');
   if (pdfBtn) {
@@ -1600,6 +1605,105 @@ function collectDesign(studioId, spec) {
     else d[el.dataset.d] = el.value;
   });
   S.design[studioId] = d;
+}
+
+/**
+ * LISTELEME GORSELI PANELI
+ * Etsy'de satan sey listeleme fotografi; arac bugune kadar yalnizca baski
+ * dosyasi uretiyordu.
+ */
+async function mockupPaneli(studioId) {
+  const out = document.getElementById('dout');
+  out.innerHTML = '<div class="card"><span class="spin"></span>hazirlaniyor...</div>';
+  let opts;
+  try { opts = await api('/api/etsy/mockup/secenekler'); }
+  catch (err) { out.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`; return; }
+
+  if (!S.mockup) S.mockup = { urun: 'tisort', renkler: ['siyah', 'beyaz'] };
+
+  const ciz = () => {
+    out.innerHTML = `
+      <div class="card">
+        <h2>Listeleme gorseli</h2>
+        <div class="notice info">${esc(opts.not)}</div>
+        <div class="field">
+          <label>Urun</label>
+          <div class="choices">${opts.urunler.map((u) => `
+            <button type="button" class="choice ${S.mockup.urun === u.key ? 'on' : ''}" data-mockurun="${esc(u.key)}">
+              <b>${esc(u.label)}</b></button>`).join('')}</div>
+        </div>
+        <div class="field">
+          <label>Renkler <span class="dim">(birden fazla secebilirsin)</span></label>
+          <div class="nisler">${opts.renkler.map((r) => `
+            <button type="button" class="ghost tiny ${S.mockup.renkler.includes(r.key) ? 'secili' : ''}" data-mockrenk="${esc(r.key)}">
+              <span class="renkNokta" style="background:${esc(r.kumas)}"></span>${esc(r.label)}</button>`).join('')}</div>
+        </div>
+        <div class="row">
+          <button type="button" class="btn" id="mockuret">${S.mockup.renkler.length} gorsel uret</button>
+        </div>
+        <div id="mockonizleme"></div>
+      </div>
+      <div id="mockcikti"></div>`;
+
+    out.querySelectorAll('[data-mockurun]').forEach((b) => {
+      b.onclick = () => { S.mockup.urun = b.dataset.mockurun; ciz(); onizle(); };
+    });
+    out.querySelectorAll('[data-mockrenk]').forEach((b) => {
+      b.onclick = () => {
+        const k = b.dataset.mockrenk;
+        const i = S.mockup.renkler.indexOf(k);
+        if (i >= 0) { if (S.mockup.renkler.length > 1) S.mockup.renkler.splice(i, 1); }
+        else S.mockup.renkler.push(k);
+        ciz(); onizle();
+      };
+    });
+    document.getElementById('mockuret').onclick = uret;
+    onizle();
+  };
+
+  const onizle = async () => {
+    const kutu = document.getElementById('mockonizleme');
+    if (!kutu) return;
+    try {
+      const r = await api('/api/etsy/mockup/onizleme', {
+        design: S.design[studioId], urun: S.mockup.urun, renk: S.mockup.renkler[0],
+      });
+      kutu.innerHTML = `<hr class="sep"><div class="mockonizleme">${r.svg}</div>`;
+      const svg = kutu.querySelector('svg');
+      if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); svg.style.maxWidth = '100%'; svg.style.height = 'auto'; }
+    } catch (err) {
+      kutu.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+    }
+  };
+
+  const uret = async () => {
+    const btn = document.getElementById('mockuret');
+    const kutu = document.getElementById('mockcikti');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>uretiliyor';
+    try {
+      const r = await api('/api/etsy/mockup/uret', {
+        design: S.design[studioId], urun: S.mockup.urun, renkler: S.mockup.renkler,
+      });
+      kutu.innerHTML = `${exportBar(r.export)}
+        <div class="card">
+          <h2>${r.gorseller.length} listeleme gorseli hazir</h2>
+          <div class="gallery">${r.gorseller.map((g) => `
+            <div class="shot"><img src="${esc(g.url)}" loading="lazy">
+              <div class="meta">${esc(g.category || '')}
+                <div class="actions"><a class="ghost tiny" href="${esc(g.url)}" download>Indir</a></div>
+              </div></div>`).join('')}</div>
+        </div>`;
+      await refresh();
+    } catch (err) {
+      kutu.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = `${S.mockup.renkler.length} gorsel uret`;
+    }
+  };
+
+  ciz();
 }
 
 async function bulkDesign(studioId) {

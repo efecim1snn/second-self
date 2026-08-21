@@ -20,6 +20,7 @@ const output = require('../../output');
 const design = require('./design');
 const listing = require('./listing');
 const niches = require('./niches');
+const mockup = require('./mockup');
 const pazar = require('./pazar');
 const render = require('../../raster');
 
@@ -344,6 +345,86 @@ module.exports = {
      * PDF'e gomuyor (dogrulandi: /BaseFont /AAAAAA+Arial-Black), metin vektor
      * kaliyor. Bircok matbaa zaten PDF istiyor.
      */
+    /* ------------------------------------------------- listeleme gorseli */
+
+    /**
+     * MOCKUP - Etsy'de satan sey listeleme fotografidir.
+     * Arac bugune kadar yalnizca BASKI dosyasi uretiyordu; o dosya baskiciya
+     * gider, alicinin gordugu sey degildir.
+     *
+     * Stok gorsel YOK: urun vektorle ciziliyor. Bu bir fotograf degildir ve
+     * oyleymis gibi sunulmuyor.
+     */
+    'GET /mockup/secenekler': async () => ({
+      urunler: mockup.urunler(),
+      renkler: mockup.renkler(),
+      not: 'Vektor mockup - fotograf degil. Gercek fotograf icin urunu basip cekmen ya da '
+        + 'POD saglayicinin kendi mockup uretecini kullanman gerekir (Printful/Printify bunu ucretsiz veriyor).',
+    }),
+
+    'POST /mockup/onizleme': async (body) => ({
+      svg: mockup.toSvg(body.design || {}, { urun: body.urun, renk: body.renk }),
+      boyut: mockup.BOYUT,
+    }),
+
+    /** Secilen renklerde listeleme gorselleri uretir ve klasore yazar. */
+    'POST /mockup/uret': async (body) => {
+      if (!render.available()) {
+        const e = new Error('Listeleme gorseli icin sistemde Chrome/Edge bulunamadi.');
+        e.status = 503;
+        throw e;
+      }
+      const d = body.design || {};
+      const urun = body.urun || 'tisort';
+      const renkler = Array.isArray(body.renkler) && body.renkler.length
+        ? body.renkler.slice(0, 6)
+        : ['siyah'];
+
+      const ilkSatir = Array.isArray(d.lines) ? d.lines.find(Boolean) : d.lines;
+      const job = output.createJobFolder({ studio: 'etsy', title: `${ilkSatir || 'tasarim'} - listeleme gorseli` });
+
+      const uretilen = [];
+      let sira = 0;
+      for (const renk of renkler) {
+        const svg = mockup.toSvg(d, { urun, renk });
+        const buffer = await render.svgToPng(svg, mockup.BOYUT, mockup.BOYUT, { background: '#ffffff' });
+        const file = store.saveImageBuffer(buffer, 'png');
+        const item = {
+          id: file.id,
+          filename: file.filename,
+          url: file.url,
+          createdAt: new Date().toISOString(),
+          studio: 'etsy',
+          category: `Listeleme gorseli · ${urun} · ${renk}`,
+          design: d,
+          isGolden: false,
+        };
+        store.addGalleryItem(item);
+        uretilen.push(item);
+        if (job) {
+          sira += 1;
+          output.writeImage(job, buffer, { index: sira, ext: 'png', label: `${urun} ${renk}` });
+        }
+      }
+
+      if (job) {
+        output.writeText(job, 'bilgi.txt', [
+          'SECOND SELF - listeleme gorselleri',
+          '==================================', '',
+          `Tarih : ${new Date().toLocaleString('tr-TR')}`,
+          `Urun  : ${urun}`,
+          `Renk  : ${renkler.join(', ')}`,
+          `Olcu  : ${mockup.BOYUT}x${mockup.BOYUT} (Etsy listeleme gorselleri icin onerilen kare olcu)`,
+          '', 'ONEMLI',
+          'Bunlar VEKTOR mockuptur, fotograf DEGILDIR. Etsy listelemende kullanabilirsin',
+          'ama urunun gercek fotografi her zaman daha iyi donusur. POD saglayicin',
+          '(Printful/Printify) kendi mockup uretecini ucretsiz veriyor - oradan da alabilirsin.',
+        ].join('\n'));
+      }
+
+      return { gorseller: uretilen, export: job ? { name: job.name, path: job.path } : null };
+    },
+
     'POST /pdf': async (body) => {
       const d = body.design || {};
       const size = design.SIZES[d.size] || design.SIZES.tisort;

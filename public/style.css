@@ -523,3 +523,24 @@ button.ghost.danger:hover { background: rgba(255,77,109,.1); }
 .varyantgorsel svg { max-height: 120px; }
 
 .sablonrozet { display: inline-flex; gap: 2px; align-items: center; }
+
+/* ------------------------------------------------- listeleme gorseli */
+.mockonizleme {
+  max-width: 340px;
+  margin: 10px auto 0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.renkNokta {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+  border: 1px solid rgba(255,255,255,.25);
+  vertical-align: middle;
+}
+button.ghost.secili {
+  border-color: rgba(124,92,255,.6);
+  background: rgba(124,92,255,.14);
+  color: #fff;
+}
