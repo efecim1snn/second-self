@@ -4,6 +4,15 @@ Sıfırdan **bir insan** yaratır: yüzünden ailesine, şehrinden gelirine, gü
 Karakteri **kilitler**, yüzünün 8 açıdan vesikalığını çıkarır ve ondan sonra ne istersen —
 "spor salonunda foto", "kahve reklamı yap" — hep **aynı kişiyi** üretir.
 
+Dört stüdyo, tek araç:
+
+| Stüdyo | Ne yapar | API gerekir mi |
+|---|---|---|
+| 🧬 **AI Influencer** | Karakteri yaratır, kilitler, her karede aynı kişiyi üretir | Kareler için evet |
+| 📖 **Fotoroman** | Beş perdelik hikâye, konuşma balonları, sayfa düzeni, çekim senaryosu | **Hayır** (kareler hariç) |
+| 🎨 **Etsy POD** | Baskıya hazır tasarım, listeleme metni, pazar araştırması, mağazaya taslak | Hayır |
+| 📣 **Reklam** | Sosyal medya reklam ve duyuru görselleri | Hayır |
+
 **Sıfır npm bağımlılığı** — `npm install` yok, `node_modules` yok, `package.json` içindeki
 `dependencies` boş.
 
@@ -12,7 +21,7 @@ Ama "hiçbir şey gerekmez" demek doğru olmaz. Gerçek gereksinimler:
 | Ne | Gerekli mi | Ne için |
 |---|---|---|
 | **Node.js 18+** | **Zorunlu** | Panelin kendisi |
-| **Chrome veya Edge** | **PNG/PDF için zorunlu** | Etsy ve Reklam stüdyoları tasarımı vektörden PNG'ye burada çevirir. Yoksa yalnızca SVG indirebilirsin. |
+| **Chrome veya Edge** | **PNG/PDF için zorunlu** | Fotoroman, Etsy ve Reklam stüdyoları tasarımı vektörden PNG'ye burada çevirir. Yoksa yalnızca SVG indirebilirsin. |
 | Görsel üretim API'si | Hayır | Varsayılan Pollinations ücretsiz ve anahtarsız çalışır |
 | Etsy API anahtarı | Hayır | Pazar araştırması ve mağazaya taslak gönderme |
 
@@ -425,6 +434,100 @@ görselini veya özgün sözünü kopyalamaz/saklamaz. İstek yalnızca sen "Ara
 
 ---
 
+## Fotoroman: karakterinden hikâye çıkarmak
+
+Bu araçtaki tek gerçekten ayırt edici yetenek **aynı insanı onlarca karede aynı tutmak**.
+Fotoroman bunu kullanan ilk çıktı: beş perdelik bir hikâye, konuşma balonları, sayfa düzeni.
+
+**İki aşama var ve birincisi tamamen bedava.**
+
+| Aşama | Gerekli | Ne çıkıyor |
+|---|---|---|
+| 1. Hikâye | hiçbir şey | Kare dökümü, diyaloglar, sayfa düzeni, **çekim senaryosu** (bütün promptlar dahil) |
+| 2. Kareler | bağlı görsel API'si | Karelerin gerçek fotoğrafları |
+
+Anahtarın yoksa 1. aşama tek başına işe yarar: `senaryo.txt` içindeki promptları
+istediğin araca yapıştırıp kareleri elle üretebilirsin.
+
+### ⚠️ Yüz kayması: fotoromanın en kritik meselesi
+
+Fotoroman **yüz kaymasına en az tahammül eden** formattır. Tek karede fark edilmeyen
+ufak bir değişim, 12 karelik bir hikâyede ürünü bozar — okuyucu hikâyeyi değil hatayı görür.
+
+Görsel platformlarının **yarısı referans görsel kabul etmiyor** — anahtarsız çalışan tek
+seçenek olan Pollinations dahil. O platformlarda yüz yalnızca metinle ve seed ile tutulur,
+yani kareler arasında **değişebilir**.
+
+Panel bunu gizlemiyor: **Fotoroman** sekmesini açar açmaz üretimden önce uyarı çıkıyor.
+Yüzü gerçekten kilitlemek istiyorsan referans destekleyen bir platform bağla
+(Replicate, fal, ComfyUI, AUTOMATIC1111 — bkz. *Görsel üretim platformunu bağlama*).
+
+### Süreklilik kuralları
+
+Bir akış için doğru olan, hikâye için felakettir. Akışta 12 gönderinin birbirine
+benzememesi istenir; hikâyede tam tersi. Fotoroman stüdyosu bu yüzden kendi kurallarıyla
+çalışıyor:
+
+- **Kıyafet tüm hikâye boyunca tek.** Bir öğleden sonra geçen hikâyede karakter her karede
+  üstünü değiştiremez.
+- **Mekân perde sınırında değişir**, rastgele değil — ve iki mekân **birbirine komşu**
+  seçilir (kafenin içi → aynı kafenin önü). Karakter aralarında yürüyebilmeli.
+- **Işık tek zaman dilimi.** Kare 3 gece, kare 4 gündüz olamaz.
+- **Plan dili çizgi roman grameriyle:** geniş planla kur, ortaya yaklaş, doruk noktada yüze
+  gir, sonunda geri çekil.
+
+### Beş perde
+
+| Perde | Ne olur | Pay |
+|---|---|---|
+| Kuruluş | Kim, nerede, her şey yolundayken | %20 |
+| Kıvılcım | Düzeni bozan şey oluyor | %15 |
+| Gerilim | Büyüyor, çıkış görünmüyor | %25 |
+| Dönüş | Doruk nokta — karar anı | %20 |
+| Kapanış | Sonrası, geri çekiliyoruz | %20 |
+
+5–24 kare arası seçebilirsin; kare sayısı arttıkça perdeler paylarına göre genişler.
+En az 5, çünkü beş perdenin her biri en az bir kare almalı.
+
+### Diyalog
+
+Altı tür (gündelik, romantik, gerilim, gizem, komedi, dram) × beş perde için ayrı replik
+havuzları var. **Motor senin hikâyeni yazmaz** — hiçbir şablon senin aklındakini bilemez;
+yaptığı iş her kareye doğru türde ve doğru ağırlıkta bir başlangıç repliği koymak.
+Paneldeki her balon düzenlenebilir.
+
+Üç kural kodla garanti altında:
+
+- **Sessizlik kuraldır**, eksiklik değil. Her kareye balon koyan fotoroman yorucu okunur ve
+  görseli boğar. Karelerin ~%19'u sessiz.
+- **Dönüş perdesi her zaman konuşur.** Hikâyenin bedelini ödediği yer orası.
+- **Üst üste üç aynı balon türü çıkmaz** — sayfa tek sesli olmasın diye.
+
+### Balonlar ve sayfa
+
+Balonun yeri tesadüf değil, plandan türüyor: **yakın planda yüz kadrajın ortasını doldurduğu
+için balon altta**, geniş planda üstte. Yanlış tarafa konan balon karakterin yüzünü kapatır
+ve fotoromanda kapanan yüz, kayan yüzden daha az affedilir.
+
+Sayfa biçimleri: Instagram karusel (4:5), kare, Story/TikTok (9:16), ve A4 albüm sayfası
+(4 veya 6 kare). Dört tema (klasik, gece, pastel, sinema), dört balon yazı tipi.
+Çıktı PNG veya tek dosya **PDF albüm**.
+
+### Ne çıkıyor
+
+Masaüstündeki tek klasöre:
+
+```
+2026-08-22 00-47 - fotoroman - Gündelik - 8 kare/
+  01 - sayfa-1.png  ...  08 - sayfa-8.png
+  senaryo.txt
+```
+
+`senaryo.txt` bir çekim senaryosu: süreklilik notları, kare kare plan/poz/ortam/ışık,
+balon metni ve **her karenin tam promptu + seed'i**.
+
+---
+
 ## Çıktılar nereye gidiyor?
 
 Her iş için masaüstünde **ayrı bir klasör** açılır. Görsel, prompt ve gönderi metni
@@ -566,13 +669,24 @@ src/
   promptcraft.js       kilitli kimlik → her platformun diline göre prompt
   scenes.js            poz/kıyafet/ortam/ışık üretimi
   store.js             JSON kalıcılık + sıfırlama
+  tipografi.js         metin ölçme ve satır sarma (vektör tasarımın temeli)
+  glifler.js           harf genişliği tablosu + sistemdeki fontları ölçme
   providers/           görsel üretim platformları (her biri tek dosya)
   upscalers/           büyütme araçları (aynı desen: sen bağlarsın)
+  studios/
+    karakter/          AI Influencer
+    fotoroman/         hikaye.js (perde/süreklilik) · diyalog.js (balon) · sayfa.js (çizim)
+    etsy/              POD tasarım + listeleme + pazar araştırması + mağaza
+    reklam/            sosyal medya reklam görselleri
 public/                panel arayüzü
 data/                  karakterin, anahtarların, görsellerin (git'e girmez)
 ```
 
 Yeni platform eklemek: `src/providers/` içine bir dosya koy, `src/providers/index.js`'teki listeye ekle.
+
+Yeni stüdyo eklemek: `src/studios/<ad>/index.js` yaz, `src/studios/index.js`'teki listeye ekle.
+Kendi ekranını isteyen stüdyo `public/app.js` içindeki `EKRANLAR` tablosuna bir satır ekler;
+tasarım tabanlı bir stüdyoysa (Etsy/Reklam gibi) `STUDIO_FORMS`'a girmesi yeterli.
 
 ---
 

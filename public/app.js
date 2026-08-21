@@ -20,6 +20,7 @@ const S = {
   captionPlatform: 'instagram',
   cikti: null,        // masaustu cikti ayari
   mockup: null,       // listeleme gorseli ayari
+  fotoroman: null,    // { ayar, hikaye, sayfa } - fotoroman studyosu
   sonKlasor: null,    // son uretimin is klasoru adi (metin oraya yazilsin diye)
   busy: false,
 };
@@ -292,13 +293,31 @@ async function renderWelcome() {
   });
 }
 
+/**
+ * STUDYO -> EKRAN TABLOSU
+ *
+ * render() eskiden studyo adlarini TEK TEK yaziyordu:
+ *     if (S.studio === 'etsy')   return renderStudioDesign('etsy');
+ *     if (S.studio === 'reklam') return renderStudioDesign('reklam');
+ * Bu yuzden studios/index.js'teki "yeni studyo eklemek icin baska hicbir
+ * yeri degistirmen gerekmez" notu YARI YANLISTI: kayit edilen yeni studyo
+ * panelde BOS EKRAN aciyordu. Artik tek satir buraya ekleniyor ve
+ * tasarim tabanli studyolar (Etsy/Reklam gibi) icin o bile gerekmiyor -
+ * STUDIO_FORMS'a girmek yetiyor.
+ */
+const EKRANLAR = {
+  etsy: renderStudioDesign,
+  reklam: renderStudioDesign,
+  fotoroman: renderFotoroman,
+};
+
 async function render() {
   // Karsilama yalnizca bir kez, en basta.
   if (S.status && S.status.app && !S.status.app.welcomeSeen) return renderWelcome();
   tabs();
   if (S.tab === 'ayarlar') return renderSettings();
-  if (S.studio === 'etsy') return renderStudioDesign('etsy');
-  if (S.studio === 'reklam') return renderStudioDesign('reklam');
+  const ekran = EKRANLAR[S.studio];
+  if (ekran) return ekran(S.studio);
   if (S.tab === 'kurulum') return renderWizard();
   if (S.tab === 'dosya') return renderDossier();
   if (S.tab === 'vesikalik') return renderReference();
@@ -1303,6 +1322,466 @@ const STUDIO_FORMS = {
     ],
   },
 };
+
+/* ==================================================================
+   FOTOROMAN STUDYOSU
+   ==================================================================
+
+   Iki asama, birincisi bedava:
+     Hikaye sekmesi  - hikayeyi kur, diyaloglari duzenle, senaryoyu yaz
+     Sayfalar sekmesi - sayfa duzeni, PNG ve PDF album
+
+   Kare goruntusu OLMADAN da her sey calisir; goruntusuz kare yerine
+   cerceve ve cekim bilgisi ciziliyor.
+*/
+
+function fotoromanDurum() {
+  if (!S.fotoroman) {
+    S.fotoroman = {
+      ayar: { tur: 'gundelik', kareSayisi: 8, zaman: '', mekanSayisi: 2, konu: '', tohum: 0 },
+      hikaye: null,
+      sayfa: { size: 'karusel', tema: 'klasik', font: 'elyazisi' },
+      uretiliyor: false,
+    };
+  }
+  return S.fotoroman;
+}
+
+async function renderFotoroman() {
+  if (S.tab === 'arsiv') return renderStudioArchive('fotoroman');
+  const opts = await api('/api/fotoroman/secenekler');
+  if (S.tab === 'sayfalar') return renderFotoromanSayfalar(opts);
+  return renderFotoromanHikaye(opts);
+}
+
+/** Yuz kaymasi uyarisi - uretimden ONCE, gizlenmeden. */
+function fotoromanReferansUyarisi(ref) {
+  if (!ref) return '';
+  if (ref.durum === 'ready') {
+    return `<div class="notice">${esc(ref.mesaj)}</div>`;
+  }
+  return `<div class="notice warn">
+    <b>Yuz kareler arasinda degisebilir.</b><br>${esc(ref.mesaj)}
+  </div>`;
+}
+
+async function renderFotoromanHikaye(opts) {
+  const F = fotoromanDurum();
+
+  if (!opts.karakterVar) {
+    view.innerHTML = `
+      <h1>Fotoroman</h1>
+      <div class="notice warn">Fotoroman bir karakterin hikayesidir - once
+      <b>AI Influencer</b> studyosunda bir karakter yarat.</div>`;
+    return;
+  }
+
+  const sec = (ad, liste, deger, bosEtiket) => `
+    <select name="${ad}">
+      ${bosEtiket ? `<option value="">${esc(bosEtiket)}</option>` : ''}
+      ${liste.map((o) => `<option value="${esc(o.key)}" ${String(deger) === String(o.key) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+    </select>`;
+
+  view.innerHTML = `
+    <h1>Fotoroman</h1>
+    <p class="lead">Karakterinle bes perdelik bir hikaye. Hikaye, diyalog ve sayfa
+    duzeni tamamen bedava uretilir; yalnizca kare goruntuleri bagli API'ni kullanir.</p>
+
+    ${fotoromanReferansUyarisi(opts.referans)}
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Hikaye</h2>
+        <form id="fform">
+          <div class="field"><label>Tur</label>${sec('tur', opts.turler, F.ayar.tur)}
+            <p class="help" id="fturaciklama"></p></div>
+          <div class="field"><label>Kare sayisi</label>
+            <select name="kareSayisi">
+              ${opts.kareSecenekleri.map((n) => `<option value="${n}" ${F.ayar.kareSayisi === n ? 'selected' : ''}>${n} kare</option>`).join('')}
+            </select>
+            <p class="help">Bes perde her zaman var; kare sayisi arttikca perdeler genisler.</p>
+          </div>
+          <div class="field"><label>Zaman</label>${sec('zaman', opts.zamanlar, F.ayar.zaman, 'Ture birak')}</div>
+          <div class="field"><label>Mekan</label>
+            <select name="mekanSayisi">
+              <option value="1" ${F.ayar.mekanSayisi === 1 ? 'selected' : ''}>Tek mekan</option>
+              <option value="2" ${F.ayar.mekanSayisi === 2 ? 'selected' : ''}>Iki komsu mekan</option>
+            </select>
+            <p class="help">Iki mekan secilirse donus ve kapanis perdesi yan mekana geciyor -
+            mekan degisimi hikayede bir seyin degistigini soyler.</p>
+          </div>
+          <div class="field"><label>Baslik (istege bagli)</label>
+            <input name="konu" value="${esc(F.ayar.konu || '')}" placeholder="Kendi basligini yaz">
+          </div>
+        </form>
+        <div class="row">
+          <button type="button" class="btn" id="fkur">Hikayeyi kur</button>
+          <button type="button" class="ghost" id="fbaska">Baska bir hikaye</button>
+        </div>
+        <p class="help">Bu adim bedava ve aninda - hicbir API cagrilmaz.</p>
+      </div>
+
+      <div class="card">
+        <h2>Perdeler</h2>
+        <p class="help">Her fotoroman bu bes perdeden geciyor:</p>
+        <ol class="help" style="line-height:1.9;padding-left:18px">
+          ${opts.perdeler.map((p) => `<li><b>${esc(p.label)}</b> - ${esc(p.aciklama)}</li>`).join('')}
+        </ol>
+      </div>
+    </div>
+
+    <div id="fkareler"></div>`;
+
+  const form = document.getElementById('fform');
+  const turAciklama = () => {
+    const t = opts.turler.find((x) => x.key === F.ayar.tur);
+    document.getElementById('fturaciklama').textContent = t ? t.aciklama : '';
+  };
+  const topla = () => {
+    const fd = new FormData(form);
+    F.ayar.tur = fd.get('tur');
+    F.ayar.kareSayisi = Number(fd.get('kareSayisi'));
+    F.ayar.zaman = fd.get('zaman') || '';
+    F.ayar.mekanSayisi = Number(fd.get('mekanSayisi'));
+    F.ayar.konu = fd.get('konu') || '';
+    turAciklama();
+  };
+  form.oninput = topla;
+  form.onchange = topla;
+  turAciklama();
+
+  document.getElementById('fkur').onclick = () => fotoromanKur();
+  document.getElementById('fbaska').onclick = () => {
+    F.ayar.tohum = (F.ayar.tohum || 0) + 1;
+    fotoromanKur();
+  };
+
+  if (F.hikaye) fotoromanKareleriCiz();
+}
+
+async function fotoromanKur() {
+  const F = fotoromanDurum();
+  const btn = document.getElementById('fkur');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>kuruluyor'; }
+  try {
+    const r = await api('/api/fotoroman/kur', { ayar: F.ayar });
+    F.hikaye = r.hikaye;
+    fotoromanKareleriCiz();
+    toast(`${r.hikaye.kareler.length} kare hazir`, 'ok');
+  } catch (err) {
+    toast(err.message, 'bad');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Hikayeyi kur'; }
+  }
+}
+
+/**
+ * Kare listesi. Her balon DUZENLENEBILIR - motorun urettigi replik bir
+ * teklif, sonuc degil; kullanicinin aklindaki hikayeyi hicbir sablon
+ * bilemez.
+ */
+function fotoromanKareleriCiz() {
+  const F = fotoromanDurum();
+  const h = F.hikaye;
+  const kutu = document.getElementById('fkareler');
+  if (!kutu || !h) return;
+
+  const TIPLER = [
+    ['sessiz', 'Sessiz kare'],
+    ['konusma', 'Konusma'],
+    ['dusunce', 'Dusunce'],
+    ['anlatici', 'Anlatici'],
+  ];
+
+  kutu.innerHTML = `
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div>
+          <h2 style="margin-bottom:4px">${esc(h.baslik)}</h2>
+          <p class="help" style="margin:0">
+            ${esc(h.turLabel)} · ${esc(h.zamanLabel)} · ${h.kareler.length} kare<br>
+            <b>Kiyafet (sabit):</b> ${esc(h.kiyafet || '-')}<br>
+            <b>Mekan:</b> ${h.mekanlar.map(esc).join(' &rarr; ')}
+          </p>
+        </div>
+        <div class="row">
+          <button type="button" class="ghost" id="fsenaryo">Senaryoyu masaustune yaz</button>
+          <button type="button" class="btn" id="ftumkare">Kareleri uret</button>
+        </div>
+      </div>
+      <p class="help">
+        <b>Senaryo bedava:</b> cekim listesi ve butun promptlar bir metin dosyasina yazilir -
+        kareleri baska bir araçta da uretebilirsin.
+        <b>Kareleri uret</b> bagli API'ni kullanir ve kredi harcar.
+      </p>
+      <div id="fdurum"></div>
+    </div>
+
+    <div class="card">
+      <h2>Kareler</h2>
+      <div id="fliste">
+        ${h.kareler.map((k, i) => `
+          <div class="frkare" data-i="${i}" style="padding:10px 0;border-bottom:1px solid rgba(128,128,128,.2)">
+            <div class="row" style="align-items:flex-start;gap:12px">
+              <div id="fk${i}" style="width:74px;height:92px;flex:0 0 74px;border:1px solid rgba(128,128,128,.35);
+                   border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+                <span class="dim" style="font-size:11px">${k.panelNo}</span>
+              </div>
+              <div style="flex:1;min-width:0">
+                <b style="font-size:13px">${k.panelNo}. kare &middot; ${esc(k.perdeLabel)}</b>
+                <span class="dim" style="font-size:12px"> &middot; ${esc(k.shotKey)}</span>
+                <p class="help" style="margin:2px 0 6px">${esc(k.pose)}</p>
+                <div class="row" style="gap:6px">
+                  <select data-tip="${i}" style="flex:0 0 130px">
+                    ${TIPLER.map(([v, l]) => `<option value="${v}" ${(k.balon ? k.balon.tip : 'sessiz') === v ? 'selected' : ''}>${l}</option>`).join('')}
+                  </select>
+                  <input data-metin="${i}" style="flex:1" value="${esc(k.balon ? k.balon.metin : '')}"
+                    placeholder="${k.balon ? '' : 'sessiz kare'}" ${k.balon ? '' : 'disabled'}>
+                  <button type="button" class="ghost tiny" data-uret="${i}">Uret</button>
+                </div>
+              </div>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  // --- balon duzenleme
+  kutu.querySelectorAll('[data-tip]').forEach((sel) => {
+    sel.onchange = () => {
+      const i = Number(sel.dataset.tip);
+      const inp = kutu.querySelector(`[data-metin="${i}"]`);
+      if (sel.value === 'sessiz') {
+        h.kareler[i].balon = null;
+        inp.value = ''; inp.disabled = true; inp.placeholder = 'sessiz kare';
+      } else {
+        const eski = h.kareler[i].balon;
+        h.kareler[i].balon = { tip: sel.value, metin: (eski && eski.metin) || '' };
+        inp.disabled = false; inp.placeholder = 'balon metni';
+        inp.focus();
+      }
+    };
+  });
+  kutu.querySelectorAll('[data-metin]').forEach((inp) => {
+    inp.oninput = () => {
+      const i = Number(inp.dataset.metin);
+      if (h.kareler[i].balon) h.kareler[i].balon.metin = inp.value;
+    };
+  });
+
+  // --- tek kare uret
+  kutu.querySelectorAll('[data-uret]').forEach((b) => {
+    b.onclick = () => fotoromanKareUret(Number(b.dataset.uret));
+  });
+
+  document.getElementById('fsenaryo').onclick = () => fotoromanSenaryo();
+  document.getElementById('ftumkare').onclick = () => fotoromanTumKareler();
+
+  // Onceden uretilmis kareler varsa kucuk gorselleri geri koy.
+  h.kareler.forEach((k, i) => { if (k.imageUrl) fotoromanKucukGorsel(i, k.imageUrl); });
+}
+
+function fotoromanKucukGorsel(i, url) {
+  const hucre = document.getElementById('fk' + i);
+  if (hucre) {
+    hucre.innerHTML = `<img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover">`;
+  }
+}
+
+async function fotoromanKareUret(i) {
+  const F = fotoromanDurum();
+  const kare = F.hikaye.kareler[i];
+  const hucre = document.getElementById('fk' + i);
+  if (hucre) hucre.innerHTML = '<span class="spin"></span>';
+  try {
+    const r = await api('/api/fotoroman/kare-uret', { kare });
+    if (r.image) {
+      kare.imageId = r.image.id;
+      kare.imageUrl = r.image.url;
+      fotoromanKucukGorsel(i, r.image.url);
+    } else if (hucre) {
+      hucre.innerHTML = '<span class="dim" style="font-size:11px">yok</span>';
+    }
+    return true;
+  } catch (err) {
+    if (hucre) hucre.innerHTML = '<span class="dim" style="font-size:11px">hata</span>';
+    toast(`${kare.panelNo}. kare: ${err.message}`, 'bad');
+    return false;
+  }
+}
+
+/**
+ * Kareleri SIRAYLA uretir.
+ *
+ * Neden hepsi tek istekte degil: 12 karelik hikaye 12 API cagrisi demek.
+ * Tek istekte yapilsa hem zaman asimina ugrardi hem de 9. karede hata
+ * alinca ilk 8'in emegi cope giderdi. Burada her kare kendi basina
+ * kaydediliyor, hata olan kare tek basina tekrar denenebiliyor.
+ */
+async function fotoromanTumKareler() {
+  const F = fotoromanDurum();
+  if (F.uretiliyor) return;
+  F.uretiliyor = true;
+  const btn = document.getElementById('ftumkare');
+  const durum = document.getElementById('fdurum');
+  if (btn) btn.disabled = true;
+
+  let basarili = 0;
+  const toplam = F.hikaye.kareler.length;
+  for (let i = 0; i < toplam; i++) {
+    if (durum) {
+      durum.innerHTML = `<div class="notice">Kare ${i + 1}/${toplam} uretiliyor...
+        ${basarili} tamam.</div>`;
+    }
+    if (await fotoromanKareUret(i)) basarili++;
+  }
+
+  F.uretiliyor = false;
+  if (btn) btn.disabled = false;
+  if (durum) {
+    durum.innerHTML = basarili === toplam
+      ? `<div class="notice ok">${toplam} kare hazir. <b>Sayfalar</b> sekmesine gec.</div>`
+      : `<div class="notice warn">${basarili}/${toplam} kare uretildi.
+         Eksik kalanlarin yanindaki <b>Uret</b> tusuyla tek tek deneyebilirsin;
+         uretilmeyen kareler sayfada cerceve olarak cikar.</div>`;
+  }
+}
+
+async function fotoromanSenaryo() {
+  const F = fotoromanDurum();
+  const btn = document.getElementById('fsenaryo');
+  const durum = document.getElementById('fdurum');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>yaziliyor'; }
+  try {
+    const r = await api('/api/fotoroman/senaryo', {
+      hikaye: F.hikaye, exportTo: S.sonKlasor || undefined,
+    });
+    if (r.export) S.sonKlasor = r.export.name;
+    if (durum) {
+      durum.innerHTML = `${exportBar(r.export)}
+        <p class="help">Senaryo <b>senaryo.txt</b> olarak yazildi -
+        ${r.metin.length.toLocaleString('tr-TR')} karakter, butun promptlar dahil.</p>`;
+    }
+  } catch (err) {
+    if (durum) durum.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Senaryoyu masaustune yaz'; }
+  }
+}
+
+/* ------------------------------------------------------- sayfalar sekmesi */
+
+async function renderFotoromanSayfalar(opts) {
+  const F = fotoromanDurum();
+
+  if (!F.hikaye) {
+    view.innerHTML = `
+      <h1>Sayfalar</h1>
+      <div class="notice warn">Once <b>Hikaye</b> sekmesinde bir hikaye kur.</div>`;
+    return;
+  }
+
+  const sec = (ad, liste, deger) => `
+    <select name="${ad}">
+      ${liste.map((o) => `<option value="${esc(o.key)}" ${deger === o.key ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}
+    </select>`;
+
+  const uretilen = F.hikaye.kareler.filter((k) => k.imageId).length;
+  const toplam = F.hikaye.kareler.length;
+
+  view.innerHTML = `
+    <h1>Sayfalar</h1>
+    <p class="lead">${esc(F.hikaye.baslik)} · ${toplam} kare ·
+      ${uretilen}/${toplam} kare goruntusu hazir</p>
+
+    ${uretilen < toplam ? `<div class="notice">
+      Goruntusu olmayan kareler cerceve ve cekim bilgisiyle ciziliyor -
+      sayfa duzenini simdi de gorebilir, PNG/PDF olarak alabilirsin.</div>` : ''}
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Duzen</h2>
+        <form id="sform">
+          <div class="field"><label>Sayfa bicimi</label>${sec('size', opts.sizes, F.sayfa.size)}</div>
+          <div class="field"><label>Tema</label>${sec('tema', opts.temalar, F.sayfa.tema)}</div>
+          <div class="field"><label>Balon yazi tipi</label>${sec('font', opts.fontlar, F.sayfa.font)}</div>
+        </form>
+        <div class="row">
+          <button type="button" class="btn" id="spng">PNG uret</button>
+          <button type="button" class="ghost" id="spdf">PDF album</button>
+        </div>
+        <p class="help">Album bicimleri birden fazla kareyi tek A4 sayfaya diziyor;
+        sosyal bicimlerde her kare ayri sayfa olur (karusel / slayt).</p>
+        <div id="sout"></div>
+      </div>
+      <div class="card">
+        <h2>Onizleme</h2>
+        <div id="sprev"><span class="dim">hazirlaniyor...</span></div>
+      </div>
+    </div>`;
+
+  const form = document.getElementById('sform');
+  const onEdit = () => {
+    const fd = new FormData(form);
+    F.sayfa.size = fd.get('size');
+    F.sayfa.tema = fd.get('tema');
+    F.sayfa.font = fd.get('font');
+    fotoromanOnizleme();
+  };
+  form.onchange = onEdit;
+
+  document.getElementById('spng').onclick = () => fotoromanCikti('uret');
+  document.getElementById('spdf').onclick = () => fotoromanCikti('pdf');
+
+  fotoromanOnizleme();
+}
+
+async function fotoromanOnizleme() {
+  const F = fotoromanDurum();
+  const kutu = document.getElementById('sprev');
+  if (!kutu) return;
+  try {
+    const r = await api('/api/fotoroman/onizleme', {
+      hikaye: F.hikaye, size: F.sayfa.size, tema: F.sayfa.tema, font: F.sayfa.font,
+    });
+    // Ilk dort sayfa - hepsini basmak uzun hikayelerde tarayiciyi yoruyor.
+    const goster = r.sayfalar.slice(0, 4);
+    kutu.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+        ${goster.map((svg) => `<div style="width:100%">${svg.replace('<svg ', '<svg style="width:100%;height:auto;display:block" ')}</div>`).join('')}
+      </div>
+      ${r.sayfaSayisi > goster.length
+        ? `<p class="help">${r.sayfaSayisi} sayfanin ilk ${goster.length}'i gosteriliyor.</p>`
+        : `<p class="help">${r.sayfaSayisi} sayfa.</p>`}`;
+  } catch (err) {
+    kutu.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  }
+}
+
+async function fotoromanCikti(tip) {
+  const F = fotoromanDurum();
+  const btn = document.getElementById(tip === 'pdf' ? 'spdf' : 'spng');
+  const out = document.getElementById('sout');
+  const eski = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>uretiliyor';
+  try {
+    const r = await api('/api/fotoroman/' + tip, {
+      hikaye: F.hikaye, size: F.sayfa.size, tema: F.sayfa.tema, font: F.sayfa.font,
+      exportTo: S.sonKlasor || undefined,
+    });
+    if (r.export) S.sonKlasor = r.export.name;
+    out.innerHTML = tip === 'pdf'
+      ? `${exportBar(r.export)}<p class="help">Album PDF hazir.
+         <a class="ghost tiny" href="${esc(r.url)}" download>PDF indir</a></p>`
+      : `${exportBar(r.export)}<p class="help">${r.sayfalar.length} sayfa
+         ${r.w}x${r.h} piksel olarak uretildi ve masaustune yazildi.</p>`;
+  } catch (err) {
+    out.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = eski;
+  }
+}
 
 async function renderStudioDesign(studioId) {
   if (S.tab === 'arsiv') return renderStudioArchive(studioId);
