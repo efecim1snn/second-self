@@ -590,7 +590,7 @@ let _onbellek = null;
 function onbellekDosyasi() {
   // store'u burada require ediyoruz - dosya basinda etmek dongusel bagimlilik
   // riski tasiyor (store -> ... -> glifler).
-  const store = require('../../store');
+  const store = require('./store');
   return path.join(store.DATA_DIR, 'glif-tablo.json');
 }
 
@@ -616,7 +616,7 @@ function olculmusTablo() {
  * Sunucu acilisinda bir kez, arka planda cagriliyor - kullaniciyi bekletmez.
  */
 async function olcVeKaydet() {
-  const raster = require('../../raster');
+  const raster = require('./raster');
   if (!raster.available()) return null;
 
   const FONT_TANIM = {
@@ -631,7 +631,7 @@ async function olcVeKaydet() {
     tablo[ad] = await raster.measureGlyphs(x.f, x.w);
   }
 
-  const store = require('../../store');
+  const store = require('./store');
   store.ensureDirs();
   fs.writeFileSync(onbellekDosyasi(), JSON.stringify({
     platform: process.platform,

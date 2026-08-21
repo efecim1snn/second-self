@@ -130,6 +130,22 @@ function get(id) {
   return REGISTRY.find((p) => p.id === id) || manual;
 }
 
+/**
+ * Kayitli ayardan AKTIF saglayiciyi ve onun yapilandirmasini cozer.
+ *
+ * Ayni cozumleme server.js icinde activeProvider() olarak duruyordu ve
+ * oraya gomulu oldugu icin studyolar erisemiyordu - fotoroman studyosu
+ * yazilirken ya kopyalanacakti ya da server.js'ten disari acilacakti.
+ * Cozumleme saf bir islem oldugu icin dogru yeri burasi.
+ *
+ * @param {object} cfg  store.getProviderConfig() ciktisi
+ * @returns {{ spec, config }}
+ */
+function active(cfg = {}) {
+  const spec = get(cfg.active || 'manual');
+  return { spec, config: (cfg.entries && cfg.entries[spec.id]) || {} };
+}
+
 const helpers = require('./helpers');
 
-module.exports = { list, get, REGISTRY, helpers, referenceState };
+module.exports = { list, get, active, REGISTRY, helpers, referenceState };

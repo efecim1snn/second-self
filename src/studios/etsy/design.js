@@ -105,7 +105,7 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-const glifler = require('./glifler');
+const glifler = require('../../glifler');
 const { VARSAYILAN } = glifler;
 
 /**

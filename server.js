@@ -1297,6 +1297,8 @@ function answersFromCharacter(character) {
 }
 
 // Studyolar kendi rotalarini kendi klasorlerinde tasir; burada tabloya karisir.
+// Studyolara cekirdek yeteneklerini bagla (fotoroman kare uretimi icin).
+studios.init({ generateScene });
 Object.assign(routes, studios.routes());
 
 function isConfigured(spec, config) {
@@ -1517,7 +1519,7 @@ process.on('unhandledRejection', (err) => {
  * kadar gomulu yedek kullanilir. */
 setTimeout(() => {
   try {
-    const glifler = require('./src/studios/etsy/glifler');
+    const glifler = require('./src/glifler');
     if (glifler.olculmusTablo()) return;   // zaten olculmus
     glifler.olcVeKaydet()
       .then((t) => { if (t) console.log('   [olcum] Yazi tipleri bu sistemde olculdu, tablo guncellendi.'); })

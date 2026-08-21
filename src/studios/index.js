@@ -17,14 +17,17 @@
  *   sorular, veri modeli, sekmeler, cikti bicimi
  *
  * Yeni studyo eklemek: src/studios/<ad>/index.js yaz, asagidaki listeye ekle.
- * Baska hicbir yeri degistirmen gerekmez.
+ * Tasarim tabanli bir studyoysa (Etsy/Reklam gibi) panel onu kendiliginden
+ * cizer; kendi ekranini isteyen studyo public/app.js icinde EKRANLAR
+ * tablosuna bir satir ekler.
  */
 
 const karakter = require('./karakter');
+const fotoroman = require('./fotoroman');
 const etsy = require('./etsy');
 const reklam = require('./reklam');
 
-const REGISTRY = [karakter, etsy, reklam];
+const REGISTRY = [karakter, fotoroman, etsy, reklam];
 
 function list() {
   return REGISTRY.map((s) => ({
@@ -42,6 +45,20 @@ function get(id) {
 }
 
 /** Studyolarin kendi API rotalarini tek tabloda toplar: "POST /api/menu/kaydet" */
+/**
+ * Studyolara cekirdek yeteneklerini baglar.
+ *
+ * Bazi studyolar server.js icinde duran isleve muhtac (fotoroman kare
+ * uretimi -> generateScene). Calisan uretim yolunu disari tasiyip risk
+ * almak yerine, server.js acilirken buradan ENJEKTE ediliyor. Kancasi
+ * olmayan studyo atlanir.
+ */
+function init(cekirdek) {
+  for (const studio of REGISTRY) {
+    if (typeof studio.init === 'function') studio.init(cekirdek);
+  }
+}
+
 function routes() {
   const out = {};
   for (const studio of REGISTRY) {
@@ -53,4 +70,4 @@ function routes() {
   return out;
 }
 
-module.exports = { REGISTRY, list, get, routes };
+module.exports = { REGISTRY, list, get, routes, init };
