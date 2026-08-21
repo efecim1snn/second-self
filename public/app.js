@@ -2515,6 +2515,12 @@ function renderSettings() {
   view.innerHTML = `
     <h1>Ayarlar</h1>
 
+    <div class="card" id="kurulumkart">
+      <h2>Kurulum durumu</h2>
+      <p class="help">Yalnizca ilk ikisi zorunlu. Gerisi ne yapmak istedigine gore.</p>
+      <div id="kurulumliste"><span class="spin"></span></div>
+    </div>
+
     <div class="notice info">
       <b>Bu otomasyon gorsel uretmez.</b> Hicbir stok gorsel de icermez.
       Gorseli <b>bagli platform</b> uretir. Varsayilan olarak <b>Pollinations.ai</b> secilidir:
@@ -2657,6 +2663,25 @@ function renderSettings() {
       s.value = b.dataset.pickProvider;
       s.onchange();
     };
+  });
+
+  // Kurulum durumu - depoyu yeni acan kisi neyin eksik oldugunu gorsun.
+  api('/api/kurulum').then((r) => {
+    const kutu = document.getElementById('kurulumliste');
+    if (!kutu) return;
+    kutu.innerHTML = r.adimlar.map((a) => `
+      <div class="kurulumsatir ${a.tamam ? 'tamam' : (a.zorunlu ? 'eksik' : 'istege')}">
+        <span class="kurulumisaret">${a.tamam ? '✓' : (a.zorunlu ? '!' : '·')}</span>
+        <div>
+          <b>${esc(a.ad)}</b>
+          ${a.zorunlu ? '<span class="tag kotu">zorunlu</span>' : '<span class="tag">istege bagli</span>'}
+          <span class="dim">${esc(a.deger)}</span>
+          <div class="help">${esc(a.not)}</div>
+        </div>
+      </div>`).join('');
+  }).catch(() => {
+    const kutu = document.getElementById('kurulumliste');
+    if (kutu) kutu.innerHTML = '<p class="dim">Kurulum durumu okunamadi.</p>';
   });
 
   const sel = document.getElementById('provsel');

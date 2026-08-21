@@ -675,6 +675,90 @@ const routes = {
 
   /* ------------------------------------------------- masaustu cikti ayari */
 
+  /**
+   * KURULUM DURUMU
+   *
+   * Depoyu yeni acan kisi neyin hazir neyin eksik oldugunu tek bakista
+   * gorsun diye. Hicbiri "hata" degil - cogu istege bagli; amac yol
+   * gostermek, korkutmak degil.
+   */
+  'GET /api/kurulum': async () => {
+    const { spec, config } = activeProvider();
+    const refState = providers.referenceState(spec, config);
+    const raster = require('./src/raster');
+    const ciktiCfg = output.getConfig();
+
+    let etsyApi = false;
+    let etsyMagaza = null;
+    try {
+      const pazar = require('./src/studios/etsy/pazar');
+      etsyApi = pazar.getConfig().hazir;
+    } catch {}
+    try {
+      const magaza = require('./src/studios/etsy/magaza');
+      etsyMagaza = magaza.getConfig();
+    } catch {}
+
+    return {
+      adimlar: [
+        {
+          ad: 'Node.js',
+          zorunlu: true,
+          tamam: true,
+          deger: process.version,
+          not: 'Panelin kendisi bunun uzerinde calisiyor.',
+        },
+        {
+          ad: 'Chrome / Edge',
+          zorunlu: true,
+          tamam: raster.available(),
+          deger: raster.available() ? 'bulundu' : 'bulunamadi',
+          not: raster.available()
+            ? 'Baskiya hazir PNG ve PDF uretilebiliyor.'
+            : 'Etsy ve Reklam studyolari tasarimi PNG/PDF\'e ceviremiyor - yalnizca SVG indirebilirsin. Chrome veya Edge kur.',
+        },
+        {
+          ad: 'Gorsel uretim saglayicisi',
+          zorunlu: false,
+          tamam: spec.id !== 'manual',
+          deger: spec.label,
+          not: refState.state === 'ready'
+            ? 'Yuz kilidi acik - referans kare gonderiliyor.'
+            : refState.state === 'needs-config'
+              ? `Yuz kilidi KAPALI: ${refState.reason || ''}`
+              : 'Bu platform referans gorsel kabul etmiyor; acilar arasinda yuz kayabilir. Ayarlar > karsilastirma tablosuna bak.',
+        },
+        {
+          ad: 'Masaustu cikti klasoru',
+          zorunlu: false,
+          tamam: !!ciktiCfg.enabled,
+          deger: ciktiCfg.enabled ? ciktiCfg.root : 'kapali',
+          not: ciktiCfg.enabled
+            ? 'Her is kendi klasorune yaziliyor.'
+            : 'Kapali - ciktilar yalnizca galeride kalir.',
+        },
+        {
+          ad: 'Etsy pazar arastirmasi',
+          zorunlu: false,
+          tamam: etsyApi,
+          deger: etsyApi ? 'anahtar girildi' : 'anahtar yok',
+          not: etsyApi
+            ? 'Canli Etsy verisiyle desen cikarabilirsin.'
+            : 'Nis kutuphanesi anahtarsiz zaten calisiyor. Canli veri istersen Etsy POD > Pazar arastirmasi.',
+        },
+        {
+          ad: 'Etsy magazasi',
+          zorunlu: false,
+          tamam: !!(etsyMagaza && etsyMagaza.bagli),
+          deger: etsyMagaza && etsyMagaza.bagli ? (etsyMagaza.shopName || 'bagli') : 'bagli degil',
+          not: etsyMagaza && etsyMagaza.bagli
+            ? 'Tasarimlari magazana TASLAK olarak gonderebilirsin (yayina alma senin elinde).'
+            : 'Istege bagli. Etsy POD > Magaza sekmesinde adim adim anlatiliyor.',
+        },
+      ],
+    };
+  },
+
   'GET /api/cikti': async () => ({
     config: output.getConfig(),
     jobs: output.listJobs(20),

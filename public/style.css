@@ -544,3 +544,28 @@ button.ghost.secili {
   background: rgba(124,92,255,.14);
   color: #fff;
 }
+
+/* ------------------------------------------------------- kurulum durumu */
+.kurulumsatir {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  font-size: 13px;
+}
+.kurulumsatir:last-child { border-bottom: 0; }
+.kurulumsatir .help { margin: 3px 0 0; }
+.kurulumisaret {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+.kurulumsatir.tamam .kurulumisaret { background: rgba(64,214,142,.16); color: #a9f0c8; }
+.kurulumsatir.eksik .kurulumisaret { background: rgba(255,77,109,.16); color: #ffb3c1; }
+.kurulumsatir.istege .kurulumisaret { background: rgba(255,255,255,.07); color: #9d96b8; }
+.kurulumsatir .tag { margin: 0 6px; }

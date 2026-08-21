@@ -4,7 +4,68 @@ Sıfırdan **bir insan** yaratır: yüzünden ailesine, şehrinden gelirine, gü
 Karakteri **kilitler**, yüzünün 8 açıdan vesikalığını çıkarır ve ondan sonra ne istersen —
 "spor salonunda foto", "kahve reklamı yap" — hep **aynı kişiyi** üretir.
 
-Sıfır bağımlılık. Node.js 18+ dışında hiçbir şey gerekmez.
+**Sıfır npm bağımlılığı** — `npm install` yok, `node_modules` yok, `package.json` içindeki
+`dependencies` boş.
+
+Ama "hiçbir şey gerekmez" demek doğru olmaz. Gerçek gereksinimler:
+
+| Ne | Gerekli mi | Ne için |
+|---|---|---|
+| **Node.js 18+** | **Zorunlu** | Panelin kendisi |
+| **Chrome veya Edge** | **PNG/PDF için zorunlu** | Etsy ve Reklam stüdyoları tasarımı vektörden PNG'ye burada çevirir. Yoksa yalnızca SVG indirebilirsin. |
+| Görsel üretim API'si | Hayır | Varsayılan Pollinations ücretsiz ve anahtarsız çalışır |
+| Etsy API anahtarı | Hayır | Pazar araştırması ve mağazaya taslak gönderme |
+
+Chrome/Edge zaten çoğu bilgisayarda kurulu; ayrıca bir şey indirmen gerekmiyor, panel sistemdekini
+başsız modda kullanıyor. Ama **kurulu değilse baskı dosyası üretilemez** — panelde bunu söylüyor.
+
+---
+
+## Kurulum sırası — bunu takip et
+
+Aşağıdakilerin **yalnızca ilk ikisi zorunlu.** Gerisi ne yapmak istediğine göre.
+
+### 1. Çalıştır (zorunlu, 1 dakika)
+
+```bash
+git clone https://github.com/efecim1snn/second-self.git
+cd second-self
+```
+
+Windows'ta `BASLAT.bat` dosyasına çift tıkla. macOS / Linux'ta `bash baslat.sh`.
+Panel: **http://localhost:4200** — `npm install` yok, kurulum yok.
+
+### 2. Chrome/Edge kurulu mu? (baskı dosyası üretecekseniz zorunlu)
+
+Panel **Etsy POD → Tasarım** ekranında bunu kendisi söylüyor: bulamazsa sarı bir uyarı çıkar ve
+"SVG indirip kendi aracında PNG'ye çevirebilirsin" der. Uyarı yoksa her şey hazır.
+
+### 3. Görsel üretim platformu (isteğe bağlı)
+
+**Hiçbir şey yapmazsan da çalışır** — Pollinations.ai varsayılan olarak bağlı, ücretsiz, anahtar
+istemez. Ama fotoğraf gerçekçiliği vermez (aşağıdaki uyarıya bak) ve referans görsel kabul etmez,
+yani yüz açılar arasında kayar.
+
+Yüzü gerçekten kilitlemek istiyorsan: **Ayarlar → Görsel üretim sağlayıcısı** → Replicate, fal.ai
+veya yerel ComfyUI/Stable Diffusion. Anahtarı sen alırsın; bu otomasyonun kendi anahtarı yoktur.
+Ayarlar'daki karşılaştırma tablosu hangisinin ne verdiğini gösteriyor.
+
+### 4. Etsy pazar araştırması (isteğe bağlı, ücretsiz)
+
+Niş kütüphanesi **anahtarsız** çalışır — 15 niş, 13 uzun kuyruklu etiket, söz kalıpları.
+Canlı Etsy verisi istiyorsan [etsy.com/developers/register](https://www.etsy.com/developers/register)
+adresinden ücretsiz bir Keystring al, **Etsy POD → Pazar araştırması** sekmesine yapıştır.
+
+### 5. Etsy mağaza bağlantısı (isteğe bağlı)
+
+Tasarımı doğrudan mağazana **taslak** olarak göndermek istiyorsan. Aynı geliştirici hesabından bir
+uygulama + bir **https** yönlendirme adresi gerekiyor (`http://localhost` kabul edilmiyor).
+Adım adım anlatım **Etsy POD → Mağaza** sekmesinde.
+
+> Bu araç listeyi **yayına almaz** — yalnızca taslak oluşturur. Silme izni hiç istenmez.
+
+**Anahtarların hiçbiri repoya girmez.** Hepsi yalnızca senin bilgisayarında `data/` klasöründe
+durur, `data/` de `.gitignore`'dadır.
 
 ---
 
@@ -115,7 +176,7 @@ Karakter bir kez kilitlendiği için yeni bir insan yaratmanın tek yolu budur.
 
 ## Ne üreteceğini nereden bileceksin? (vidIQ)
 
-Second Self karakteri yaratır ve görseli üretir. Ama **"hangi içerik tutar"** sorusunun cevabı bu araçta
+Second Self karakteri yaratır ve görseli **bağlı API'den** üretir. Ama **"hangi içerik tutar"** sorusunun cevabı bu araçta
 yok — o veriyle gelir.
 
 Bunun için **vidIQ** öneriyoruz: nişinde normalin kat kat üstünde etkileşim almış Instagram Reels ve
@@ -134,20 +195,9 @@ linkte görürsün: **[vidiq.com/efecim](https://www.vidiq.com/efecim)**
 > Otomasyonun hiçbir özelliği buna bağlı değil: ilk açılışta çıkan karşılama ekranında
 > "Şimdilik geç" dersen her şey aynen çalışır, hiçbir yere kayıt gerekmez.
 
-## Kurulum
+## Çalıştırma notları
 
-```bash
-git clone https://github.com/efecim1snn/second-self.git
-cd second-self
-```
-
-Windows'ta `BASLAT.bat` dosyasına çift tıkla. macOS / Linux'ta:
-
-```bash
-bash baslat.sh
-```
-
-Panel: **http://localhost:4200**
+Panel: **http://localhost:4200** (kurulum sırası için yukarı bak)
 
 > ⚠️ **Aynı klasörden ikinci bir panel açma.** İki sunucu süreci aynı `data/` klasörüne yazarsa
 > galeri kareleri kaybolur ve karakter dosyası bozulabilir. Otomasyon bunu artık engelliyor:

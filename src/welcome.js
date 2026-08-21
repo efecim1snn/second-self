@@ -17,12 +17,20 @@ const VIDIQ_URL = 'https://www.vidiq.com/efecim';
 
 const WELCOME = {
   id: 'vidiq',
-  title: 'Baslamadan once: ne uretecegini nereden bileceksin?',
+  title: 'Hos geldin - once bu arac ne yapiyor',
   body: [
-    'Second Self karakteri yaratir ve gorseli uretir. Ama "hangi icerik tutar" sorusunun cevabi bu araçta yok - o veriyle gelir.',
-    'Bunun icin vidIQ kullaniyoruz: nisinde normalin kat kat ustunde etkilesim almis Instagram Reels ve TikTok videolarini bulup kancasini sokmeye yariyor. Yani sahneyi tahminle degil, patlamis orneklere bakarak seciyorsun.',
+    // DIKKAT: burada "gorseli uretir" YAZMAZ. Onceki surumde oyle yaziyordu ve
+    // README'nin en kalin uyarisiyla ("bu otomasyon gorselin kendisini
+    // URETMEZ") dogrudan celisiyordu. Ilk ekranda soylenen sey, urunun
+    // temel kuraliyla ayni olmali.
+    'Second Self sifirdan sanal bir insan yaratir ve kimligini kilitler: yuzu, hayati, sehri, rutini. Sonra ondan is istersin - "kahve reklami yap", "sokakta kombin cekimi" - ve her karede AYNI kisiyi uretecek prompt\'u kurar.',
+    'GORSELI KENDISI URETMEZ ve stok gorsel icermez. Gorsel her zaman senin bagladigin API\'den gelir; varsayilan Pollinations ucretsiz ve anahtarsizdir.',
+    'Ayrica iki panel daha var ve ikisi de yapay zeka GEREKTIRMEZ: Etsy POD (baskiya hazir tasarim + listeleme metni + listeleme gorseli) ve Reklam/Grafik Tasarim.',
+    'Kurulum sirasi ve neyin zorunlu neyin istege bagli oldugu README\'de yaziyor. Su an hicbir sey ayarlamadan devam edebilirsin.',
   ],
-  question: 'vidIQ kullaniyor musun?',
+  // vidIQ onerisi urun anlatimindan SONRA geliyor. Ilk ekranda ucuncu taraf
+  // reklami gormek, urunun ne oldugunu ogrenmeden once yanlis izlenim veriyordu.
+  question: 'Ne uretecegini bulmak icin veri lazim - vidIQ kullaniyor musun?',
   options: [
     { key: 'var', label: 'Evet, kullaniyorum' },
     { key: 'yok', label: 'Hayir, bakayim' },
