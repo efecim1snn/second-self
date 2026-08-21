@@ -290,6 +290,22 @@ kendi nişini yaz; sistem şunları üretir:
 Türkçe yazabilirsin: `kedi` → `cat`. Kütüphanede olmayan nişte jenerik kalıplara düşer
 ve bunu sana söyler.
 
+### Tasarım tarafı
+
+- **Varyant şeridi** — aynı sözü 5 farklı görünümde yan yana gösterir, beğendiğine tıklarsın.
+  Bedava ve anında: önizleme yolu tarayıcı çalıştırmaz, sadece vektör kurar.
+- **4 üründe birden üret** — tişört + kare (çanta/yastık) + kupa + poster, **tek klasöre**,
+  her biri **kendi Etsy listeleme metniyle**. Ürün kelimesi değişince etiketler de değişiyor:
+  `cat mom shirt` → `cat mom mug` → `cat mom poster`.
+- **Büyük harfe çevir** kapatılabilir. Kapalıyken yazdığın gibi kalır — serif ve el yazısı
+  yazı tipleri küçük harfle çok daha iyi duruyor, bu seçenek olmadan o ikisi fiilen
+  kullanılamıyordu.
+- **Yazı genişliği ölçülüyor, tahmin edilmiyor.** Başsız Chrome her yazı tipinin her harfini
+  bir kez ölçüyor (`glifler.js`), sonrası saf toplama — önizlemede tarayıcı hiç çalışmaz.
+  Eskiden tek bir sabit vardı (`0.58`) ve harfler baskı dosyasının dışında kalıyordu.
+
+Çıktı her üründe: **300 DPI + sRGB + şeffaf PNG**, güvenli baskı marjının içinde.
+
 ### Katman 2 — canlı Etsy verisi (kendi API anahtarın, ücretsiz)
 
 **Bu otomasyonun kendi Etsy anahtarı YOKTUR ve olmayacak.** Public bir depoda paylaşılan

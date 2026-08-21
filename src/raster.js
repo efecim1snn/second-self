@@ -173,7 +173,21 @@ function crc32(buf) {
 const PNG_IMZA = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
 
 /**
- * PNG buffer'ina pHYs parcasi ekler (varsa gunceller).
+ * sRGB parcasi: "bu dosyanin renkleri sRGB'dir" der.
+ * POD baskisi sRGB bekliyor; renk yonetimi acik bir hatta profil yoksa
+ * renkler kayabiliyor. 13 bayt, altyapi zaten kurulu.
+ * rendering intent 0 = perceptual (fotograf/grafik icin standart).
+ */
+function srgbParca() {
+  const tip = Buffer.from('sRGB', 'latin1');
+  const veri = Buffer.from([0]);
+  const uzunluk = Buffer.alloc(4); uzunluk.writeUInt32BE(veri.length, 0);
+  const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(Buffer.concat([tip, veri])), 0);
+  return Buffer.concat([uzunluk, tip, veri, crc]);
+}
+
+/**
+ * PNG buffer'ina pHYs (cozunurluk) ve sRGB (renk uzayi) parcalarini ekler.
  * @param {Buffer} png
  * @param {number} dpi
  * @returns {Buffer} yeni buffer - girdiyi degistirmez
@@ -210,10 +224,11 @@ function setPngDpi(png, dpi = 300) {
     const son = p + 12 + uzunluk;
     if (son > png.length) break; // bozuk dosya - oldugu gibi birak
 
-    if (t !== 'pHYs') parcalar.push(png.slice(p, son));
+    if (t !== 'pHYs' && t !== 'sRGB') parcalar.push(png.slice(p, son));
 
     if (t === 'IHDR' && !eklendi) {
       parcalar.push(parca);
+      parcalar.push(srgbParca());
       eklendi = true;
     }
     p = son;

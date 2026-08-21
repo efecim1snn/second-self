@@ -23,6 +23,27 @@ const niches = require('./niches');
 const pazar = require('./pazar');
 const render = require('../../raster');
 
+/** Etsy listeleme metnini dosyaya yazilacak bicime cevirir. */
+function listelemeMetni(l, size) {
+  if (!l) return '';
+  return [
+    'ETSY LISTELEME METNI',
+    '====================', '',
+    size ? `URUN: ${size.label} (${size.w}x${size.h} @300DPI, seffaf PNG)` : '',
+    size ? '' : null,
+    `BASLIK (${(l.title || '').length}/140)`,
+    '-------',
+    l.title || '', '',
+    `ETIKETLER (${(l.tags || []).length}/13)`,
+    '----------',
+    (l.tags || []).join(', '), '',
+    'ACIKLAMA',
+    '--------',
+    l.description || '',
+    ...(l.warnings && l.warnings.length ? ['', 'UYARILAR', '--------', ...l.warnings.map((w) => `- ${w}`)] : []),
+  ].filter((x) => x !== null).join('\n');
+}
+
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -50,6 +71,29 @@ module.exports = {
         ? 'PNG uretimi hazir (sistemdeki tarayici kullaniliyor, ek kurulum yok).'
         : 'Sistemde Chrome/Edge bulunamadi. SVG indirip kendi aracinda PNG\'ye cevirebilirsin.',
     }),
+
+    /**
+     * VARYANT SERIDI - ayni sozu bes farkli gorunumde gosterir.
+     *
+     * Bedava ve aninda: onizleme yolu tarayici CALISTIRMAZ, yalnizca metin
+     * kurar. Satici 20 kombinasyon denemek yerine bir bakista seciyor.
+     */
+    'POST /varyantlar': async (body) => {
+      const temel = body.design || {};
+      const gorunumler = [
+        { layout: 'yigin', palette: temel.palette || 'siyah', font: 'kalin', etiket: 'Yigin · kalin' },
+        { layout: 'serit', palette: 'retro', font: 'kalin', etiket: 'Serit · retro' },
+        { layout: 'kemer', palette: temel.palette || 'siyah', font: 'serif', etiket: 'Kemer · serif' },
+        { layout: 'minimal', palette: 'toprak', font: 'serif', etiket: 'Minimal · toprak' },
+        { layout: 'cerceve', palette: 'okyanus', font: 'daktilo', etiket: 'Cerceve · daktilo' },
+      ];
+      return {
+        varyantlar: gorunumler.map((g) => {
+          const d = { ...temel, layout: g.layout, palette: g.palette, font: g.font };
+          return { etiket: g.etiket, design: d, svg: design.toSvg(d) };
+        }),
+      };
+    },
 
     // Onizleme: SVG dondurur, hizli ve bedava.
     'POST /onizleme': async (body) => {
@@ -105,21 +149,16 @@ module.exports = {
             `Olcu   : ${size.w}x${size.h} @300DPI (${size.label})`,
             'Zemin  : seffaf PNG',
           ].join('\n'));
-          if (listeleme) {
-            output.writeText(job, 'etsy-listeleme.txt', [
-              'ETSY LISTELEME METNI',
-              '====================', '',
-              `BASLIK (${(listeleme.title || '').length}/140)`,
-              '-------',
-              listeleme.title || '', '',
-              `ETIKETLER (${(listeleme.tags || []).length}/13)`,
-              '----------',
-              (listeleme.tags || []).join(', '), '',
-              'ACIKLAMA',
-              '--------',
-              listeleme.description || '',
-            ].join('\n'));
-          }
+          // LISTELEME METNI HER ZAMAN YAZILIR.
+          // Eskiden yalnizca kullanici once "Listeleme metni" sekmesine ugrayip
+          // doldurduysa yaziliyordu. Dogal sirayla (once tasarim, sonra
+          // listeleme) calisan satici klasorunde metni hic bulamiyordu -
+          // urunun asil satis degeri sessizce kayboluyordu.
+          const yazilacak = listeleme || listing.build({
+            phrase: (d.lines || []).filter(Boolean).join(' '),
+            size: d.size,
+          });
+          output.writeText(job, 'etsy-listeleme.txt', listelemeMetni(yazilacak, size));
         }
       } catch (err) {
         console.error('[cikti] Etsy klasoru yazilamadi:', err.message);
@@ -203,6 +242,99 @@ module.exports = {
         maxPrice: body.maxPrice,
       });
     },
+
+    /**
+     * TOPLU URETIM - ayni sozu dort urun olcusunde birden.
+     *
+     * Etsy saticisi ayni tasarimi tisortte de kupada da posterde de satiyor.
+     * Su ana kadar bunu dort kez elle yapmak gerekiyordu. Hepsi TEK klasore
+     * yaziliyor ve her biri kendi Etsy listeleme metniyle geliyor - cunku
+     * urun kelimesi degisince etiketler de degisiyor ("cat mom shirt" ->
+     * "cat mom mug").
+     */
+    'POST /toplu': async (body) => {
+      const temel = body.design || {};
+      const olculer = Array.isArray(body.sizes) && body.sizes.length
+        ? body.sizes.filter((s) => design.SIZES[s])
+        : Object.keys(design.SIZES);
+      if (!olculer.length) throw badRequest('Gecerli urun olcusu secilmedi.');
+      if (!render.available()) {
+        const e = new Error('PNG uretimi icin sistemde Chrome/Edge bulunamadi.');
+        e.status = 503;
+        throw e;
+      }
+
+      const ilkSatir = Array.isArray(temel.lines) ? temel.lines.find(Boolean) : temel.lines;
+      const job = output.createJobFolder({ studio: 'etsy', title: `${ilkSatir || 'tasarim'} - toplu` });
+
+      const sonuclar = [];
+      const hatalar = [];
+      let sira = 0;
+
+      for (const olcu of olculer) {
+        const d = { ...temel, size: olcu };
+        const size = design.SIZES[olcu];
+        try {
+          const buffer = await render.svgToPng(design.toSvg(d), size.w, size.h);
+          const file = store.saveImageBuffer(buffer, 'png');
+          const listeleme = listing.build({ ...(body.listing || {}), size: olcu });
+
+          const item = {
+            id: file.id,
+            filename: file.filename,
+            url: file.url,
+            createdAt: new Date().toISOString(),
+            studio: 'etsy',
+            category: `POD · ${size.label} · ${size.w}x${size.h}`,
+            design: d,
+            listing: listeleme,
+            isGolden: false,
+          };
+          store.addGalleryItem(item);
+
+          if (job) {
+            sira += 1;
+            output.writeImage(job, buffer, { index: sira, ext: 'png', label: size.label });
+            output.writeText(job, `etsy-listeleme - ${size.label}.txt`, listelemeMetni(listeleme, size));
+          }
+          sonuclar.push({ size: olcu, image: item, listing: listeleme });
+        } catch (err) {
+          hatalar.push({ size: olcu, hata: err.message });
+        }
+      }
+
+      if (job && sonuclar.length) {
+        output.writeText(job, 'bilgi.txt', [
+          'SECOND SELF - toplu Etsy uretimi',
+          '================================', '',
+          `Tarih  : ${new Date().toLocaleString('tr-TR')}`,
+          `Tasarim: ${(temel.lines || []).filter(Boolean).join(' / ')}`,
+          `Urun   : ${sonuclar.length} olcu`,
+          '', 'URETILENLER',
+          ...sonuclar.map((s) => `- ${design.SIZES[s.size].label} (${design.SIZES[s.size].w}x${design.SIZES[s.size].h} @300DPI, seffaf)`),
+          ...(hatalar.length ? ['', 'URETILEMEYENLER', ...hatalar.map((h) => `- ${h.size}: ${h.hata}`)] : []),
+          '', 'NOT',
+          'Her urunun Etsy listeleme metni ayri dosyada - urun kelimesi degisince',
+          'etiketler de degisiyor (cat mom shirt -> cat mom mug).',
+        ].join('\n'));
+      }
+
+      return {
+        sonuclar,
+        hatalar,
+        export: job ? { name: job.name, path: job.path } : null,
+      };
+    },
+
+    /**
+     * Etsy arsivi SUNUCUDAN geliyor.
+     * Panel eskiden /api/durum icindeki EN YENI 60 kareyi suzuyordu; 60'tan
+     * fazla is yapan satici kendi tasarimlarini goremiyordu ("Henuz tasarim
+     * yok" yaziyordu ama duruyorlardi).
+     */
+    'GET /arsiv': async () => ({
+      items: store.getGallery().filter((g) => g.studio === 'etsy').slice(0, 200),
+    }),
 
     'POST /listeleme': async (body) => {
       const built = listing.build(body.listing || {});

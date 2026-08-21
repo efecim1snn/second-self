@@ -492,3 +492,32 @@ button.ghost.danger:hover { background: rgba(255,77,109,.1); }
   padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.06);
 }
 .sozsatir:last-child { border-bottom: 0; }
+
+/* ------------------------------------------------------ Etsy varyantlari */
+.varyantlar {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.varyant {
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  padding: 8px;
+  text-align: center;
+  font-size: 11px;
+  transition: border-color .12s, background .12s;
+}
+.varyant:hover { border-color: rgba(124,92,255,.5); background: rgba(124,92,255,.06); }
+.varyantgorsel {
+  background: rgba(255,255,255,.06);
+  border-radius: 6px;
+  padding: 6px;
+  margin-bottom: 6px;
+  min-height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.varyantgorsel svg { max-height: 120px; }

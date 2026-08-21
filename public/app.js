@@ -1277,6 +1277,13 @@ const STUDIO_FORMS = {
       { key: 'palette', label: 'Renk', type: 'select', from: 'palettes' },
       { key: 'font', label: 'Yazi tipi', type: 'select', from: 'fonts' },
       { key: 'size', label: 'Urun / olcu', type: 'select', from: 'sizes' },
+      {
+        key: 'uppercase',
+        label: 'BUYUK HARFE cevir',
+        type: 'boolean',
+        default: true,
+        help: 'Kapatirsan yazdigin gibi kalir. Serif ve el yazisi tipleri kucuk harfle cok daha iyi duruyor - bu kapali olmadan o iki yazi tipi fiilen kullanilamiyordu.',
+      },
     ],
   },
   reklam: {
@@ -1318,38 +1325,125 @@ async function renderStudioDesign(studioId) {
       <div class="card">
         <h2>Ayarlar</h2>
         <form id="dform">${spec.fields.map((f) => designField(f, d, opts)).join('')}</form>
+        <div id="dsatiruyari"></div>
         <div class="row">
           <button type="button" class="btn" id="dgen">PNG uret</button>
+          ${studioId === 'etsy' ? '<button type="button" class="ghost" id="dtoplu">4 urunde birden uret</button>' : ''}
           <button type="button" class="ghost" id="dsvg">SVG indir</button>
         </div>
+        ${studioId === 'etsy' ? `<p class="help">
+          <b>4 urunde birden:</b> tisort, kare (canta/yastik), kupa ve poster - hepsi tek klasore,
+          her biri kendi Etsy listeleme metniyle (urun kelimesi degisince etiketler de degisiyor).
+        </p>` : ''}
       </div>
       <div class="card">
         <h2>Onizleme</h2>
         <div id="dprev" class="preview"><span class="dim">hazirlaniyor...</span></div>
+        ${studioId === 'etsy' ? `
+        <hr class="sep">
+        <div class="row" style="justify-content:space-between">
+          <b style="font-size:14px">Varyantlar</b>
+          <button type="button" class="ghost tiny" id="dvaryant">5 gorunumu goster</button>
+        </div>
+        <p class="help">Bedava ve aninda - onizleme tarayici calistirmaz, yalnizca metin kurar.</p>
+        <div id="dvaryantlar"></div>` : ''}
       </div>
     </div>
     <div id="dout"></div>`;
 
   const form = document.getElementById('dform');
-  const onEdit = () => { collectDesign(studioId, spec); preview(); };
+  // Her tus vurusunda sunucuya gitmek yerine 140 ms bekle. Ayrica gec gelen
+  // eski cevap yeni onizlemenin uzerine yazmasin diye istek sirasi tutuluyor.
+  let gecikme = null;
+  const onEdit = () => {
+    collectDesign(studioId, spec);
+    satirUyarisi(studioId, spec);
+    clearTimeout(gecikme);
+    gecikme = setTimeout(preview, 140);
+  };
   form.oninput = onEdit;
   form.onchange = onEdit;
+  satirUyarisi(studioId, spec);
   document.getElementById('dgen').onclick = () => generateDesign(studioId);
-  document.getElementById('dsvg').onclick = downloadSvg;
+  document.getElementById('dsvg').onclick = downloadSvgUyari;
+
+  const toplu = document.getElementById('dtoplu');
+  if (toplu) toplu.onclick = () => bulkDesign(studioId);
+
+  const varyantBtn = document.getElementById('dvaryant');
+  if (varyantBtn) {
+    varyantBtn.onclick = async () => {
+      const kutu = document.getElementById('dvaryantlar');
+      varyantBtn.disabled = true;
+      kutu.innerHTML = '<p class="help"><span class="spin"></span>hazirlaniyor...</p>';
+      try {
+        const r = await api('/api/' + studioId + '/varyantlar', { design: S.design[studioId] });
+        kutu.innerHTML = `<div class="varyantlar">${r.varyantlar.map((v, i) => `
+          <div class="varyant" data-varyant="${i}">
+            <div class="varyantgorsel">${v.svg}</div>
+            <div class="dim">${esc(v.etiket)}</div>
+          </div>`).join('')}</div>`;
+        kutu.querySelectorAll('.varyantgorsel svg').forEach((s) => {
+          s.removeAttribute('width'); s.removeAttribute('height');
+          s.style.maxWidth = '100%'; s.style.height = 'auto';
+        });
+        kutu.querySelectorAll('[data-varyant]').forEach((el) => {
+          el.onclick = () => {
+            const v = r.varyantlar[Number(el.dataset.varyant)];
+            S.design[studioId] = { ...S.design[studioId], ...v.design };
+            toast('Gorunum uygulandi.', 'ok');
+            render();
+          };
+        });
+      } catch (err) {
+        kutu.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+      } finally { varyantBtn.disabled = false; }
+    };
+  }
+
   preview();
 
+  let istekNo = 0;
   async function preview() {
-    const r = await api('/api/' + studioId + '/onizleme', { design: S.design[studioId] });
     const box = document.getElementById('dprev');
-    box.innerHTML = r.svg;
-    const svg = box.querySelector('svg');
-    if (svg) {
-      svg.removeAttribute('width');
-      svg.removeAttribute('height');
-      svg.style.maxWidth = '100%';
-      svg.style.height = 'auto';
+    if (!box) return;
+    const benim = ++istekNo;
+    try {
+      const r = await api('/api/' + studioId + '/onizleme', { design: S.design[studioId] });
+      // Gec gelen eski cevabi at - yoksa ekranda bir onceki tasarim kalir.
+      if (benim !== istekNo) return;
+      box.innerHTML = r.svg;
+      const svg = box.querySelector('svg');
+      if (svg) {
+        svg.removeAttribute('width');
+        svg.removeAttribute('height');
+        svg.style.maxWidth = '100%';
+        svg.style.height = 'auto';
+      }
+      box.dataset.svg = r.svg;
+    } catch (err) {
+      if (benim !== istekNo) return;
+      // Eskiden hata sessizce yutuluyordu; kullanici bos kutuya bakiyordu.
+      box.innerHTML = `<div class="notice bad">Onizleme alinamadi: ${esc(err.message)}</div>`;
     }
-    box.dataset.svg = r.svg;
+  }
+
+  function downloadSvgUyari() {
+    // SVG yalnizca yazi tipinin ADINI tasiyor, kendisini degil. Baska
+    // bilgisayarda veya baskicida o font yoksa dosya bambaska gorunur.
+    // Kullaniciya bunu SOYLEMEDEN dosyayi vermek dogru degil.
+    modal('SVG indirmeden once',
+      `<div class="notice warn"><b>Yazi tipi dosyaya gomulu degil.</b></div>
+       <p>SVG icinde yalnizca yazi tipinin <b>adi</b> yaziyor ("Arial Black", "Georgia"...).
+       Dosyayi acan bilgisayarda o yazi tipi yoksa metin baska bir fontla cizilir -
+       harf genislikleri degisir, tasarim bozulur.</p>
+       <p class="help">Baskiciya gonderecegin dosya <b>PNG</b> olmali: orada yazi zaten
+       piksele donmustur ve her yerde ayni gorunur. SVG'yi yalnizca kendin duzenlemek
+       icin indir.</p>`,
+      [
+        { label: 'Yine de indir', onClick: () => { closeModal(); downloadSvg(); } },
+        { label: 'Vazgec', className: 'btn', onClick: closeModal },
+      ]);
   }
 
   function downloadSvg() {
@@ -1368,12 +1462,20 @@ function defaultsFor(spec, opts) {
   for (const f of spec.fields) {
     if (f.type === 'select') d[f.key] = ((opts[f.from] || [])[0] || {}).key;
     else if (f.type === 'lines') d[f.key] = (f.placeholder || '').split('\n');
+    else if (f.type === 'boolean') d[f.key] = !!f.default;
     else d[f.key] = '';
   }
   return d;
 }
 
 function designField(f, d, opts) {
+  if (f.type === 'boolean') {
+    // d[f.key] tanimsizsa varsayilan f.default
+    const acik = d[f.key] === undefined ? !!f.default : !!d[f.key];
+    return `<div class="field"><label style="display:flex;gap:8px;align-items:center">
+      <input type="checkbox" data-d="${esc(f.key)}" style="width:auto" ${acik ? 'checked' : ''}> ${esc(f.label)}
+    </label>${f.help ? `<p class="help">${esc(f.help)}</p>` : ''}</div>`;
+  }
   if (f.type === 'select') {
     const list = opts[f.from] || [];
     const cur = list.find((o) => o.key === d[f.key]) || {};
@@ -1390,15 +1492,66 @@ function designField(f, d, opts) {
     <input data-d="${esc(f.key)}" value="${esc(d[f.key] || '')}" placeholder="${esc(f.placeholder || '')}"></div>`;
 }
 
+/**
+ * design.js metni 5 satirla siniriyor (slice(0,5)). Kullanici 7 satir
+ * yazarsa 2'si sessizce dusuyordu ve nereye gittigini anlamiyordu.
+ */
+function satirUyarisi(studioId, spec) {
+  const kutu = document.getElementById('dsatiruyari');
+  if (!kutu) return;
+  const alan = spec.fields.find((f) => f.type === 'lines');
+  if (!alan) { kutu.innerHTML = ''; return; }
+  const satirlar = (S.design[studioId] || {})[alan.key] || [];
+  kutu.innerHTML = satirlar.length > 5
+    ? `<div class="notice warn">Tasarim en fazla <b>5 satir</b> alir; yazdigin ${satirlar.length} satirin
+       son ${satirlar.length - 5} tanesi <b>kullanilmayacak</b>.</div>`
+    : '';
+}
+
 function collectDesign(studioId, spec) {
   const d = S.design[studioId] || {};
   document.querySelectorAll('[data-d]').forEach((el) => {
     const f = spec.fields.find((x) => x.key === el.dataset.d);
-    d[el.dataset.d] = (f && f.type === 'lines')
-      ? el.value.split('\n').map((x) => x.trim()).filter(Boolean)
-      : el.value;
+    if (f && f.type === 'boolean') d[el.dataset.d] = el.checked;
+    else if (f && f.type === 'lines') d[el.dataset.d] = el.value.split('\n').map((x) => x.trim()).filter(Boolean);
+    else d[el.dataset.d] = el.value;
   });
   S.design[studioId] = d;
+}
+
+async function bulkDesign(studioId) {
+  const btn = document.getElementById('dtoplu');
+  const out = document.getElementById('dout');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>4 urun uretiliyor';
+  out.innerHTML = '';
+  try {
+    const r = await api('/api/' + studioId + '/toplu', {
+      design: S.design[studioId],
+      listing: S.listing || undefined,
+    });
+    out.innerHTML = `
+      ${exportBar(r.export)}
+      ${r.hatalar.length ? `<div class="notice warn">${r.hatalar.length} urun uretilemedi:
+        ${r.hatalar.map((h) => esc(h.size + ' - ' + h.hata)).join('<br>')}</div>` : ''}
+      <div class="card">
+        <h2>${r.sonuclar.length} urun hazir</h2>
+        <p class="help">Hepsi tek klasorde, her biri kendi Etsy listeleme metniyle.</p>
+        <div class="gallery">${r.sonuclar.map((s) => `
+          <div class="shot"><img src="${esc(s.image.url)}" loading="lazy">
+            <div class="meta">${esc(s.image.category || '')}
+              <div class="actions">
+                <a class="ghost tiny" href="${esc(s.image.url)}" download>Indir</a>
+              </div>
+            </div></div>`).join('')}</div>
+      </div>`;
+    await refresh();
+  } catch (err) {
+    out.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '4 urunde birden uret';
+  }
 }
 
 async function generateDesign(studioId) {
@@ -1548,8 +1701,17 @@ async function renderEtsyListing() {
   };
 }
 
-function renderStudioArchive(studioId) {
-  const items = (S.status.gallery || []).filter((g) => g.studio === studioId);
+async function renderStudioArchive(studioId) {
+  // ARSIV SUNUCUDAN. Eskiden /api/durum icindeki EN YENI 60 kare suzuluyordu;
+  // 60'tan fazla is yapan satici kendi tasarimlarini goremiyor, ekranda
+  // "Henuz tasarim yok" yaziyordu - oysa hepsi duruyordu.
+  let items;
+  if (studioId === 'etsy') {
+    try { items = (await api('/api/etsy/arsiv')).items; }
+    catch { items = (S.status.gallery || []).filter((g) => g.studio === studioId); }
+  } else {
+    items = (S.status.gallery || []).filter((g) => g.studio === studioId);
+  }
   view.innerHTML = `
     <h1>Arsiv</h1>
     <p class="lead">Bu studyoda uretilen tasarimlar.</p>

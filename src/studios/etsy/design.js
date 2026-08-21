@@ -103,6 +103,25 @@ function widthEm(text, fontKey) {
  * Tasarimi SVG olarak kurar.
  * @param {object} d { lines[], layout, palette, font, size, uppercase }
  */
+/**
+ * Ayni sayfada birden fazla tasarim gosterildiginde SVG id'leri carpisir:
+ * her yay `id="arc"` kullaniyordu ve `href="#arc"` belgedeki ILK yaya
+ * baglaniyordu - yani ikinci tasarimin metni birincinin yayini takip
+ * ediyordu. Panelde bugun tek tasarim gosterildigi icin gorunmuyordu;
+ * varyant seridi eklenince aninda bozulurdu.
+ *
+ * Id tasarimdan DETERMINISTIK turetiliyor: ayni girdi ayni SVG'yi verir.
+ */
+function idFor(d, size) {
+  const kaynak = JSON.stringify([d.lines, d.layout, d.font, d.palette, d.size, size.w, size.h]);
+  let h = 2166136261;
+  for (let i = 0; i < kaynak.length; i++) {
+    h ^= kaynak.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
 function toSvg(d) {
   const size = SIZES[d.size] || SIZES.tisort;
   const pal = PALETTES[d.palette] || PALETTES.siyah;
@@ -122,8 +141,18 @@ function toSvg(d) {
    */
   const padX = Math.round(size.w * 0.08);
   const padY = Math.round(size.h * 0.08);
-  const boxW = size.w - padX * 2;
-  const boxH = size.h - padY * 2;
+
+  /* GLIF TASMASI PAYI
+   * widthEm ILERLEME genisligini (advance width) toplar - yatayda dogru olcu
+   * budur. Ama harflerin gorsel siniri (bbox) bundan biraz tasar: serifin
+   * kuyruklari, el yazisinin kavisleri yan bosluklarin disina cikar; dikeyde
+   * de cikinti ve alt uzanti satir yuksekliginden buyuk olabilir.
+   * Olculdu: bu tasma en kotu durumda kutunun ~%6'si. Kullanilabilir alani
+   * o kadar kisiyoruz - boylece yazi guvenli marjin ICINDE kaliyor.
+   */
+  const TASMA_PAYI = 0.92;
+  const boxW = (size.w - padX * 2) * TASMA_PAYI;
+  const boxH = (size.h - padY * 2) * TASMA_PAYI;
 
   const lineGap = 1.12;
   const unit = boxH / (text.length * lineGap);
@@ -174,7 +203,9 @@ function toSvg(d) {
     let r = (c * c / 4 + h * h) / (2 * h);
     let yayUzunlugu = 2 * r * Math.asin(Math.min(c / (2 * r), 1));
     let arcFont = Math.min(fontSize * 0.72, yayUzunlugu / ilkEm);
-    let arcBaseY = padY + h + arcFont * 0.85;
+    // Olculdu: yay uzerindeki buyuk harflerin bbox tepesi, punto x 1.0 payla bile
+    // guvenli marji 27-37px deliyordu; 1.18 ile tam iceri giriyor.
+    let arcBaseY = padY + h + arcFont * 1.18;
 
     for (let adim = 0; adim < 24; adim++) {
       // Yayin altinda kalan satirlara ve alt marja yer kaliyor mu?
@@ -185,11 +216,12 @@ function toSvg(d) {
       r = (c * c / 4 + h * h) / (2 * h);
       yayUzunlugu = 2 * r * Math.asin(Math.min(c / (2 * r), 1));
       arcFont = Math.min(arcFont * 0.88, yayUzunlugu / ilkEm);
-      arcBaseY = padY + h + arcFont * 0.85;
+      arcBaseY = padY + h + arcFont * 1.18;
     }
 
-    parts.push(`<defs><path id="arc" d="M ${(cx - c / 2).toFixed(1)} ${arcBaseY.toFixed(1)} A ${r.toFixed(1)} ${r.toFixed(1)} 0 0 1 ${(cx + c / 2).toFixed(1)} ${arcBaseY.toFixed(1)}" fill="none"/></defs>`);
-    parts.push(`<text ${common} font-size="${arcFont.toFixed(1)}" fill="${pal.accent}"><textPath href="#arc" startOffset="50%">${esc(text[0])}</textPath></text>`);
+    const yayId = `arc-${idFor(d, size)}`;
+    parts.push(`<defs><path id="${yayId}" d="M ${(cx - c / 2).toFixed(1)} ${arcBaseY.toFixed(1)} A ${r.toFixed(1)} ${r.toFixed(1)} 0 0 1 ${(cx + c / 2).toFixed(1)} ${arcBaseY.toFixed(1)}" fill="none"/></defs>`);
+    parts.push(`<text ${common} font-size="${arcFont.toFixed(1)}" fill="${pal.accent}"><textPath href="#${yayId}" startOffset="50%">${esc(text[0])}</textPath></text>`);
 
     // Kalan satirlar yayin ALTINDAN baslar ve alt marja tasmaz.
     const kalan = text.slice(1);
