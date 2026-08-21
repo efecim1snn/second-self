@@ -1308,6 +1308,7 @@ async function renderStudioDesign(studioId) {
   if (S.tab === 'arsiv') return renderStudioArchive(studioId);
   if (studioId === 'etsy' && S.tab === 'listeleme') return renderEtsyListing();
   if (studioId === 'etsy' && S.tab === 'pazar') return renderEtsyPazar();
+  if (studioId === 'etsy' && S.tab === 'magaza') return renderEtsyMagaza();
 
   const spec = STUDIO_FORMS[studioId];
   const opts = await api('/api/' + studioId + '/secenekler');
@@ -2011,6 +2012,127 @@ function renderCaptions(box, data) {
   box.querySelectorAll('[data-cap]').forEach((b) => {
     b.onclick = () => copy(data.variants[Number(b.dataset.cap)].text);
   });
+}
+
+/* ------------------------------------------------------- Etsy magazasi */
+
+async function renderEtsyMagaza() {
+  let d;
+  try { d = await api('/api/etsy/magaza/durum'); }
+  catch (err) { view.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`; return; }
+  const c = d.config;
+  const k = d.kurulum;
+
+  view.innerHTML = `
+    <h1>Etsy magazasi</h1>
+    <p class="lead">Tasarimi, listeleme metnini ve listeleme gorselini magazana
+    <b>taslak</b> olarak gonderir.</p>
+
+    <div class="notice info">
+      <b>Bu arac listeyi YAYINA ALMAZ.</b> Yalnizca taslak olusturur; yayina alma,
+      fiyat degistirme ve silme islemleri Etsy'nin kendi ekraninda senin elinde kalir.
+      Burasi senin gercek magazan - bir yazilim hatasi yuzunden cop listeleme dusmesini
+      goze alamayiz.
+      <br><br>
+      <span class="dim">Taslak listelemenin ucret dogurup dogurmadigi Etsy'nin gelistirici
+      dokumanlarinda yazmiyor; dogrulayamadim. Yayina almadan once magaza panelinden kontrol et.</span>
+    </div>
+
+    ${c.bagli ? `
+    <div class="card">
+      <h2>Bagli magaza</h2>
+      <div class="field"><label>Magaza</label><b>${esc(c.shopName || '-')}</b>
+        <span class="dim">(id ${esc(String(c.shopId))})</span></div>
+      <div class="field"><label>Baglandi</label>${c.baglandi ? new Date(c.baglandi).toLocaleString('tr-TR') : '-'}</div>
+      <div class="row"><button class="ghost danger" id="mkopar">Baglantiyi kes</button></div>
+    </div>` : `
+    <div class="card">
+      <h2>${esc(k.baslik)}</h2>
+      <p class="help">${esc(k.neden)}</p>
+      <ol class="adimlar">${k.adimlar.map((a) => `<li>${esc(a)}</li>`).join('')}</ol>
+      <p class="help"><a href="${esc(k.kayitUrl)}" target="_blank" rel="noreferrer">${esc(k.kayitUrl)}</a></p>
+      ${k.notlar.map((n) => `<p class="help">• ${esc(n)}</p>`).join('')}
+    </div>
+
+    <div class="card">
+      <h2>1. Uygulama bilgileri</h2>
+      <div class="field"><label>Keystring (API anahtari)</label>
+        <input id="m_key" value="${esc(c.apiKeyMask)}" spellcheck="false"></div>
+      <div class="field"><label>Yonlendirme adresi (https)</label>
+        <input id="m_redirect" value="${esc(c.redirectUri)}" placeholder="https://siteniz.com/etsy" spellcheck="false">
+        <p class="help">Etsy uygulamasinda kayitli adresle BIREBIR ayni olmali.
+        http://localhost kabul edilmiyor.</p></div>
+      <div class="row"><button class="btn" id="mkaydet">Kaydet</button></div>
+    </div>
+
+    <div class="card">
+      <h2>2. Yetkilendir</h2>
+      <div class="row"><button class="btn" id="mbaglan">Etsy ile baglan</button></div>
+      <div id="mauth"></div>
+    </div>
+
+    <div class="card">
+      <h2>3. Kodu yapistir</h2>
+      <div class="field"><label>Adres cubugundaki code= degeri</label>
+        <input id="m_kod" spellcheck="false" placeholder="orn. abc123..."></div>
+      <div class="row"><button class="btn" id="mkod">Baglantiyi tamamla</button></div>
+    </div>`}
+
+    <div id="mcikti"></div>`;
+
+  const kaydet = document.getElementById('mkaydet');
+  if (kaydet) kaydet.onclick = async () => {
+    try {
+      await api('/api/etsy/magaza/ayar', {
+        apiKey: document.getElementById('m_key').value,
+        redirectUri: document.getElementById('m_redirect').value,
+      });
+      toast('Kaydedildi.', 'ok');
+      render();
+    } catch (err) { toast(err.message, 'bad'); }
+  };
+
+  const baglan = document.getElementById('mbaglan');
+  if (baglan) baglan.onclick = async () => {
+    try {
+      const r = await api('/api/etsy/magaza/baglan', {});
+      document.getElementById('mauth').innerHTML = `
+        <hr class="sep">
+        <p class="help">Asagidaki baglantiyi ac, izin ver, sonra adres cubugundaki
+        <span class="mono">code=</span> degerini kopyala.</p>
+        <div class="core" style="word-break:break-all">${esc(r.url)}</div>
+        <div class="row" style="margin-top:8px">
+          <a class="btn" href="${esc(r.url)}" target="_blank" rel="noreferrer">Etsy'de ac</a>
+          <button class="ghost tiny" id="mkopyala">Baglantiyi kopyala</button>
+        </div>
+        <p class="help">Istenen izinler: ${r.scopes.map(esc).join(', ')}</p>`;
+      document.getElementById('mkopyala').onclick = () => copy(r.url);
+    } catch (err) { toast(err.message, 'bad'); }
+  };
+
+  const kod = document.getElementById('mkod');
+  if (kod) kod.onclick = async () => {
+    kod.disabled = true;
+    try {
+      const ham = document.getElementById('m_kod').value.trim();
+      // Kullanici tum adresi yapistirdiysa code parametresini ayikla
+      const m = ham.match(/[?&]code=([^&\s]+)/);
+      await api('/api/etsy/magaza/kod', { kod: m ? decodeURIComponent(m[1]) : ham });
+      toast('Magaza baglandi.', 'ok');
+      render();
+    } catch (err) { toast(err.message, 'bad'); kod.disabled = false; }
+  };
+
+  const kopar = document.getElementById('mkopar');
+  if (kopar) kopar.onclick = async () => {
+    modal('Baglantiyi kes', '<p>Jetonlar bu bilgisayardan silinecek. Magazandaki listelemelere dokunulmaz.</p>', [
+      { label: 'Kes', className: 'danger ghost', onClick: async () => {
+        try { await api('/api/etsy/magaza/kopar', {}); closeModal(); toast('Baglanti kesildi.', 'ok'); render(); }
+        catch (err) { toast(err.message, 'bad'); }
+      } },
+      { label: 'Vazgec', className: 'btn', onClick: closeModal },
+    ]);
+  };
 }
 
 /* ------------------------------------------------- Etsy pazar arastirmasi */

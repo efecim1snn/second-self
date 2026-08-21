@@ -21,6 +21,7 @@ const design = require('./design');
 const listing = require('./listing');
 const niches = require('./niches');
 const mockup = require('./mockup');
+const magaza = require('./magaza');
 const pazar = require('./pazar');
 const render = require('../../raster');
 
@@ -78,6 +79,7 @@ module.exports = {
     { id: 'tasarim', label: 'Tasarim' },
     { id: 'listeleme', label: 'Listeleme metni' },
     { id: 'pazar', label: 'Pazar arastirmasi' },
+    { id: 'magaza', label: 'Magaza' },
     { id: 'arsiv', label: 'Arsiv' },
   ],
 
@@ -482,6 +484,90 @@ module.exports = {
         duzeltmeler,
         export: job ? { name: job.name, path: job.path } : null,
       };
+    },
+
+    /* --------------------------------------------------- Etsy magazasi */
+
+    /**
+     * TASLAK LISTELEME. Yayina ALMAZ - bkz. magaza.js dosya basi.
+     * Son karar her zaman Etsy'nin kendi ekraninda kullanicinin.
+     */
+    'GET /magaza/durum': async () => ({
+      config: magaza.getConfig(),
+      kapsamlar: magaza.SCOPES,
+      kurulum: {
+        baslik: 'Etsy magazani bagla - taslak listeleme icin',
+        neden: 'Bu otomasyonun kendi Etsy uygulamasi YOKTUR. Kendi uygulamani kaydediyorsun, '
+          + 'jetonlar yalnizca bu bilgisayarda duruyor.',
+        adimlar: [
+          'etsy.com/developers/register adresinden bir uygulama olustur (ucretsiz) ve Keystring\'i al.',
+          'Uygulamanin ayarlarina bir YONLENDIRME ADRESI ekle. Etsy https:// istiyor ve '
+            + 'http://localhost KABUL ETMIYOR - kendi sitenden acabildigin herhangi bir https adresi olur.',
+          'Keystring ve ayni yonlendirme adresini asagiya yaz, Kaydet de.',
+          '"Etsy ile baglan" butonuna bas; acilan Etsy sayfasinda izin ver.',
+          'Etsy seni yonlendirme adresine gonderecek. Adres cubugundaki code=... degerini kopyala.',
+          'Kopyaladigin kodu asagidaki kutuya yapistir ve Baglantiyi tamamla de.',
+        ],
+        notlar: [
+          'Neden elle kod yapistiriyorsun: panel yerelde (http://localhost) calisiyor, Etsy oraya '
+            + 'geri donemiyor. Bir kez yapilir - tazeleme anahtari 90 gun gecerli.',
+          'Istenen izinler: magaza okuma, listeleme okuma, listeleme yazma. SILME izni ISTENMIYOR.',
+          'Bu arac listeleri yalnizca TASLAK olarak olusturur. Yayina alma, fiyat degistirme ve '
+            + 'silme islemlerini yapmaz - hepsi Etsy ekraninda senin elinde.',
+        ],
+        kayitUrl: 'https://www.etsy.com/developers/register',
+      },
+    }),
+
+    'POST /magaza/ayar': async (body) => ({
+      config: magaza.saveConfig({ apiKey: body.apiKey, redirectUri: body.redirectUri }),
+    }),
+
+    'POST /magaza/baglan': async () => magaza.buildAuthUrl(),
+
+    'POST /magaza/kod': async (body) => ({
+      config: await magaza.exchangeCode(body.kod, body.state),
+    }),
+
+    'POST /magaza/kopar': async () => ({ config: magaza.kopar() }),
+
+    'GET /magaza/kargo': async () => ({ profiller: await magaza.kargoProfilleri() }),
+
+    'POST /magaza/kategori-ara': async (body) => ({
+      kategoriler: await magaza.kategoriler(body.arama),
+    }),
+
+    /**
+     * Galerideki bir isi TASLAK listelemeye cevirir.
+     * Gorseller: listeleme gorselleri (mockup) once, baski dosyasi degil -
+     * Etsy'de alicinin gordugu sey mockup'tir.
+     */
+    'POST /magaza/taslak': async (body) => {
+      const listeleme = body.listing ? listing.build(body.listing) : null;
+      if (!listeleme) throw badRequest('Once listeleme metnini uret.');
+
+      const gorseller = [];
+      for (const id of (body.gorselIds || []).slice(0, 10)) {
+        const kayit = store.getGallery().find((g) => g.id === id);
+        if (!kayit) continue;
+        const buffer = store.readImageBuffer(kayit.filename);
+        if (buffer) gorseller.push({ buffer, ad: kayit.filename });
+      }
+
+      const sonuc = await magaza.taslakOlustur({
+        baslik: listeleme.title,
+        aciklama: listeleme.description,
+        etiketler: listeleme.tags,
+        fiyat: body.fiyat,
+        adet: body.adet,
+        taxonomyId: body.taxonomyId,
+        kargoProfilId: body.kargoProfilId,
+        whoMade: body.whoMade,
+        whenMade: body.whenMade,
+        gorseller,
+      });
+
+      return { ...sonuc, listeleme };
     },
 
     'POST /pdf': async (body) => {

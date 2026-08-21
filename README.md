@@ -321,6 +321,27 @@ tek seferde.
 > satıcı ürünü basıp çekmeli, ya da POD sağlayıcısının kendi mockup üretecini
 > kullanmalı (Printful/Printify bunu ücretsiz veriyor).
 
+### Mağazayı bağla — taslak listeleme
+
+Tasarımı, listeleme metnini ve listeleme görselini Etsy mağazana **taslak** olarak gönderir.
+
+> **Bu araç listeyi YAYINA ALMAZ.** Yalnızca taslak oluşturur; yayına alma, fiyat değiştirme
+> ve silme Etsy'nin kendi ekranında senin elinde kalır. Silme izni (`listings_d`) **hiç
+> istenmiyor**. Burası senin gerçek mağazan — bir yazılım hatası yüzünden çöp listeleme
+> düşmesini göze alamayız.
+>
+> Taslak listelemenin ücret doğurup doğurmadığı Etsy'nin geliştirici dokümanlarında yazmıyor;
+> doğrulayamadım. Yayına almadan önce mağaza panelinden kontrol et.
+
+**Neden elle kod yapıştırıyorsun:** Etsy OAuth yönlendirmesi `https://` olmak zorunda ve
+uygulamaya kayıtlı adresle birebir eşleşmeli — **`http://localhost` kabul edilmiyor.** Panel
+yerelde çalıştığı için Etsy bize geri dönemiyor. Bu yüzden Etsy seni kendi kaydettiğin https
+adresine gönderiyor, sen adres çubuğundaki `code=` değerini kopyalayıp panele yapıştırıyorsun.
+Bir kez yapılır — tazeleme anahtarı 90 gün geçerli, sonrası otomatik.
+
+İstenen izinler: `shops_r` (mağaza okuma), `listings_r` (listeleme okuma), `listings_w`
+(listeleme yazma). Jetonlar yalnızca senin bilgisayarında `data/etsy-magaza.json` içinde durur.
+
 ### Katman 2 — canlı Etsy verisi (kendi API anahtarın, ücretsiz)
 
 **Bu otomasyonun kendi Etsy anahtarı YOKTUR ve olmayacak.** Public bir depoda paylaşılan
