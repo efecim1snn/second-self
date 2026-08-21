@@ -1510,6 +1510,21 @@ process.on('unhandledRejection', (err) => {
   console.error('[uyari] Yakalanmamis hata:', err && err.message ? err.message : err);
 });
 
+/* GLIF OLCUMU - acilista bir kez, ARKA PLANDA.
+ * Gomulu tablo Windows'ta olculdu; baska isletim sisteminde ayni adli font
+ * olmayabilir ve harf genislikleri degisir. Ilk acilista sistemdeki gercek
+ * fontlar olculup onbellege aliniyor. Kullaniciyi BEKLETMIYOR: olcum bitene
+ * kadar gomulu yedek kullanilir. */
+setTimeout(() => {
+  try {
+    const glifler = require('./src/studios/etsy/glifler');
+    if (glifler.olculmusTablo()) return;   // zaten olculmus
+    glifler.olcVeKaydet()
+      .then((t) => { if (t) console.log('   [olcum] Yazi tipleri bu sistemde olculdu, tablo guncellendi.'); })
+      .catch(() => { /* Chrome yoksa gomulu yedek zaten calisiyor */ });
+  } catch {}
+}, 1500);
+
 server.listen(PORT, '127.0.0.1', () => {
   const character = store.getCharacter();
   const { spec } = activeProvider();

@@ -1395,7 +1395,10 @@ async function renderStudioDesign(studioId) {
       const eski = pdfBtn.textContent;
       pdfBtn.innerHTML = '<span class="spin"></span>PDF';
       try {
-        const r = await api('/api/etsy/pdf', { design: S.design[studioId] });
+        const r = await api('/api/etsy/pdf', {
+          design: S.design[studioId], exportTo: S.sonKlasor || undefined,
+        });
+        if (r.export) S.sonKlasor = r.export.name;
         out.innerHTML = `${exportBar(r.export)}
           <div class="card">
             <h2>PDF hazir · ${(r.bytes / 1024).toFixed(0)} KB</h2>
@@ -1549,7 +1552,12 @@ function defaultsFor(spec, opts) {
     if (f.type === 'select') d[f.key] = ((opts[f.from] || [])[0] || {}).key;
     else if (f.type === 'lines') d[f.key] = (f.placeholder || '').split('\n');
     else if (f.type === 'boolean') d[f.key] = !!f.default;
-    else d[f.key] = '';
+    // METIN ALANLARI DA ORNEKLE ACILIR.
+    // Etsy paneli `type:'lines'` kullandigi icin placeholder'dan dolu
+    // aciliyordu; Reklam paneli `type:'text'` kullandigi icin BOS aciliyordu
+    // ve "bedava, AI gerekmez" diye tanitilan panele giren kisi bos bir
+    // dikdortgen gorup cikiyordu. Tek satirlik fark, buyuk kayip.
+    else d[f.key] = f.placeholder || '';
   }
   return d;
 }
@@ -1689,7 +1697,9 @@ async function mockupPaneli(studioId) {
     try {
       const r = await api('/api/etsy/mockup/uret', {
         design: S.design[studioId], urun: S.mockup.urun, renkler: S.mockup.renkler,
+        exportTo: S.sonKlasor || undefined,
       });
+      if (r.export) S.sonKlasor = r.export.name;
       kutu.innerHTML = `${exportBar(r.export)}
         ${(r.duzeltmeler || []).map((m) => `<div class="notice warn">${esc(m)}</div>`).join('')}
         <div class="card">
@@ -1722,7 +1732,9 @@ async function bulkDesign(studioId) {
     const r = await api('/api/' + studioId + '/toplu', {
       design: S.design[studioId],
       listing: S.listing || undefined,
+      exportTo: S.sonKlasor || undefined,
     });
+    if (r.export) S.sonKlasor = r.export.name;
     out.innerHTML = `
       ${exportBar(r.export)}
       ${r.hatalar.length ? `<div class="notice warn">${r.hatalar.length} urun uretilemedi:
@@ -1757,6 +1769,8 @@ async function generateDesign(studioId) {
   try {
     const body = { design: S.design[studioId] };
     if (studioId === 'etsy' && S.listing) body.listing = S.listing;
+    // Ayni tasarimin butun ciktilari TEK klasore gitsin.
+    if (S.sonKlasor) body.exportTo = S.sonKlasor;
     const r = await api('/api/' + studioId + '/uret', body);
     out.innerHTML = `${exportBar(r.export)}
     <div class="card">
@@ -1910,11 +1924,11 @@ async function renderStudioArchive(studioId) {
   // ARSIV SUNUCUDAN. Eskiden /api/durum icindeki EN YENI 60 kare suzuluyordu;
   // 60'tan fazla is yapan satici kendi tasarimlarini goremiyor, ekranda
   // "Henuz tasarim yok" yaziyordu - oysa hepsi duruyordu.
+  // Her studyo icin sunucudan. Panel yalnizca en yeni 60 kareyi goruyordu.
   let items;
-  if (studioId === 'etsy') {
-    try { items = (await api('/api/etsy/arsiv')).items; }
-    catch { items = (S.status.gallery || []).filter((g) => g.studio === studioId); }
-  } else {
+  try {
+    items = (await api(`/api/${studioId}/arsiv`)).items;
+  } catch {
     items = (S.status.gallery || []).filter((g) => g.studio === studioId);
   }
   view.innerHTML = `

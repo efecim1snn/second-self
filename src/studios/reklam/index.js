@@ -26,6 +26,15 @@ module.exports = {
   ],
 
   routes: {
+    /**
+     * Arsiv SUNUCUDAN. Ayni hata Etsy'de bulunup duzeltilmisti, Reklam
+     * atlanmisti: panel /api/durum icindeki EN YENI 60 kareyi suzuyordu,
+     * 60 isten sonra eski reklamlar panelden kayboluyordu.
+     */
+    'GET /arsiv': async () => ({
+      items: store.getGallery().filter((g) => g.studio === 'reklam').slice(0, 200),
+    }),
+
     'GET /secenekler': async () => ({
       ...design.options(),
       pngHazir: raster.available(),

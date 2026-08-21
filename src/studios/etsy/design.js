@@ -105,7 +105,8 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-const { GLIFLER, VARSAYILAN } = require('./glifler');
+const glifler = require('./glifler');
+const { VARSAYILAN } = glifler;
 
 /**
  * METNIN GENISLIGI - TAHMIN DEGIL, OLCUM
@@ -123,7 +124,9 @@ const { GLIFLER, VARSAYILAN } = require('./glifler');
  * @returns {number} em cinsinden toplam ilerleme genisligi
  */
 function widthEm(text, fontKey) {
-  const tablo = GLIFLER[fontKey] || GLIFLER.kalin || {};
+  // Sistemde olculmus tablo varsa O kullanilir; yoksa gomulu yedek.
+  const hepsi = glifler.tablo();
+  const tablo = hepsi[fontKey] || hepsi.kalin || {};
   const yedek = VARSAYILAN[fontKey] || 0.75;
   let toplam = 0;
   for (const ch of String(text || '')) {

@@ -20,7 +20,7 @@
  *
  * Asagidaki alti slot, rastgele sayiyi TAM OLARAK bu sirayla tuketir:
  *
- *     1. hook      2. govde      3. detay
+ *     1. hook      2a. govde-A   2b. govde-B   3. detay
  *     4. cta       5. emoji      6. hashtag
  *
  * Araya yeni bir slot eklersen ya da sirayi degistirirsen ayni karakter ayni
@@ -125,6 +125,22 @@ const BY_ID = new Map(PLATFORMS.map((p) => [p.id, p]));
 
 /* ------------------------------------------------------------- kalip havuzu */
 
+/*
+ * OLCUM: onceki surumde 100 gonderide YALNIZCA 7 farkli govde cumlesi
+ * cikiyordu, en siki olani 19 kez birebir tekrar ediyordu ve 5 kapanis vardi.
+ * Daha kotusu: havuz bu kadar kucukken IKI FARKLI KARAKTER ayni cumleleri
+ * paylasiyordu - yani araci kullanan iki ayri kisinin hesaplari metinden
+ * birbirine baglanabilirdi.
+ *
+ * Cozum sayiyi buyutmek degil, CARPMAK: govde artik iki parcadan kuruluyor
+ * (acilis + kapanis clause), yani 18 x 16 = 288 govde bilesimi. Kanca 20,
+ * kapanis ailesi 14+14. Toplam bilesim ~80.000 mertebesinde.
+ *
+ * NOT: bu degisiklik deterministik ciktiyi BILEREK degistirir - ayni karakter
+ * artik oncekinden farkli metin uretir. Tekrar sorunu kalitenin onunde
+ * oldugu icin kabul edildi.
+ */
+
 /** Kanca kaliplari. {konu} sahneden, {sehir} karakterden gelir. */
 const HOOKS = [
   'Bugun {konu}.',
@@ -134,17 +150,63 @@ const HOOKS = [
   '{konu} - uzun zamandir denemek istiyordum.',
   'Bunu bir sure once ogrendim: {konu}.',
   '{sehir} sabahlari ve {konu}. Ikisi de ayni sey aslinda.',
+  'Sonunda {konu}.',
+  '{konu} ile ilgili kucuk bir itiraf.',
+  'Uzun zamandir aklimda olan sey: {konu}.',
+  'Bir sey fark ettim - {konu}.',
+  '{konu}. Bu kadar basit.',
+  'Herkes {ilgi} konusuyor, ben {konu} diyorum.',
+  'Gunun ozeti: {konu}.',
+  '{sehir} bugun {konu} icin dogru yerdi.',
+  'Once soyleyeyim: {konu}.',
+  'Bu kare {konu} icin cekildi ama baska bir sey anlatiyor.',
+  'Uc kelimeyle: {konu}.',
+  '{ozellik} olmanin bir bedeli var, bugunku bu: {konu}.',
+  'Kayit icin: {konu}.',
 ];
 
-/** Govde kaliplari - kisilik ozelliklerini kullanir. */
-const BODIES = [
-  '{ozellik} biri olarak bu tarz seyleri fazla dert ediyorum, ama sonuc iyi cikinca degiyor.',
-  'Aslinda plan bu degildi. Yine de boyle daha iyi oldu.',
-  'Uzerine dusundukce basitlestigini fark ediyorum: {ilgi} isin ozunde sabir isi.',
-  '{ilgi} ile ugrasanlar bilir - detay bittikten sonra baslar.',
-  'Birkac denemeden sonra oturdu. Ilk hali bunun yarisi kadar bile iyi degildi.',
-  'Bu kareyi cekerken dusundugum tek sey {ilgi} hakkinda ne kadar az sey bildigimdi.',
-  'Kucuk bir degisiklik yaptim ve her sey degisti. Genelde oyle oluyor.',
+/**
+ * GOVDE IKI PARCA.
+ * Ilk parca durumu kurar, ikincisi baglar. Ayri havuzlar carpim veriyor.
+ */
+const BODY_A = [
+  '{ozellik} biri olarak bu tarz seyleri fazla dert ediyorum',
+  'Aslinda plan bu degildi',
+  'Uzerine dusundukce basitlestigini fark ediyorum',
+  '{ilgi} ile ugrasanlar bilir',
+  'Birkac denemeden sonra oturdu',
+  'Bu kareyi cekerken tek dusundugum seydi',
+  'Kucuk bir degisiklik yaptim',
+  'Bir sure once tam tersini savunuyordum',
+  'Kimseye soylemedim ama iki kez bastan basladim',
+  'Sabah baktigimda begenmemistim',
+  'Uzun surdu, itiraf ediyorum',
+  'Once fazla geldi',
+  'Denemesi bedavaydi',
+  'Bu isin kolayi yokmus',
+  'Sabirla ilgili bir sey ogrendim',
+  '{ilgi} bana hep bunu hatirlatiyor',
+  'Elimde olsa yine ayni seyi yapardim',
+  'Bu sefer acele etmedim',
+];
+
+const BODY_B = [
+  'ama sonuc iyi cikinca degiyor.',
+  've iyi ki oyle olmus.',
+  '- sonunda hepsi ayni yere cikiyor.',
+  'sonra her sey yerine oturdu.',
+  've bir daha geri donmedim.',
+  'gerisi kendiliginden geldi.',
+  'sonucu goren anlar.',
+  'bu yuzden bugun buradayim.',
+  've galiba dogru karardi.',
+  'sonrasi tamamen alisma meselesi.',
+  '- basitlestikce iyilesiyor.',
+  've bunu tekrar yapacagim.',
+  'bir sonrakinde daha hizli olacak.',
+  'simdi daha iyi anliyorum.',
+  've hala ogreniyorum.',
+  '- acele etmemek ise yaradi.',
 ];
 
 /** Detay kaliplari - sahnenin somut ogelerini metne tasir. */
@@ -152,6 +214,11 @@ const DETAILS = [
   'Detay: {detay}.',
   'Kucuk not: {detay}.',
   '{detay} - fark eden olur mu bilmiyorum.',
+  'Bu arada: {detay}.',
+  'Gozden kacan sey: {detay}.',
+  'Ayrica {detay}.',
+  'Not dusuyorum: {detay}.',
+  '{detay} kismini ozellikle sevdim.',
 ];
 
 /** CTA aileleri. persona.voiceGuide.ctaStyle bunlardan birini seciyor. */
@@ -162,6 +229,15 @@ const CTAS = {
     'Bunu deneyen var mi?',
     'Hangisi daha iyi sizce?',
     'Yorumlarda bekliyorum.',
+    'Katiliyor musun?',
+    'Sizce bir sonraki ne olsun?',
+    'Bunu daha once denediniz mi?',
+    'Hangi tarafta durursunuz?',
+    'Ben mi abartiyorum?',
+    'Sizin yonteminiz ne?',
+    'Merak ettim: siz nasil yapiyorsunuz?',
+    'Fikri olan yazsin.',
+    'Soyleyin, yanlis mi dusunuyorum?',
   ],
   eylem: [
     'Kaydet, lazim olur.',
@@ -169,6 +245,15 @@ const CTAS = {
     'Profildeki baglantida detaylar var.',
     'Denersen bana yaz.',
     'Paylas, birinin isine yarar.',
+    'Etiketle, gorsun.',
+    'Kaydet, sonra donersin.',
+    'Yorumlara birak, cevap veriyorum.',
+    'Bir sonrakini kacirma.',
+    'Begendiysen kaydetmeyi unutma.',
+    'Denemek isteyen yazsin.',
+    'Aklinda kalsin diye kaydet.',
+    'Birine gonder, konusun.',
+    'Takip et, seri devam ediyor.',
   ],
 };
 
@@ -291,9 +376,14 @@ function buildOne(character, scene, platform, variantIndex, opts) {
   const hookHavuzu = [...HOOKS.filter((h) => guard(doldur(h), avoid)), ...acilislar];
   let hook = basHarf(doldur(pick(hookHavuzu, next) || HOOKS[0]));
 
-  /* --- 2. govde ------------------------------------------------------ */
-  const govdeHavuzu = BODIES.filter((b) => guard(doldur(b), avoid));
-  let govde = basHarf(doldur(pick(govdeHavuzu.length ? govdeHavuzu : BODIES, next)));
+  /* --- 2. govde (IKI PARCA - carpim icin) ------------------------------ */
+  const aHavuz = BODY_A.filter((b) => guard(doldur(b), avoid));
+  const bHavuz = BODY_B.filter((b) => guard(doldur(b), avoid));
+  const aParca = doldur(pick(aHavuz.length ? aHavuz : BODY_A, next));
+  const bParca = doldur(pick(bHavuz.length ? bHavuz : BODY_B, next));
+  // Ikinci parca tire veya baglacla basliyorsa bosluk, degilse virgul.
+  const ayirici = /^[-–—]/.test(bParca) ? ' ' : (/^(ama|ve|sonra|gerisi|simdi|bu|bir)/i.test(bParca) ? ', ' : ' ');
+  let govde = basHarf(`${aParca}${ayirici}${bParca}`);
 
   /* --- 3. detay ------------------------------------------------------ */
   let detayCumle = '';

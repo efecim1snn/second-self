@@ -83,12 +83,23 @@ function svgToPdf(svg, width, height, options = {}) {
       '--no-pdf-header-footer',
       `--print-to-pdf=${outPath}`,
       `file:///${htmlPath.split(String.fromCharCode(92)).join('/')}`,
-    ], { timeout: 120000 }, () => {
+    ], { timeout: 120000 }, (err) => {
       try {
         if (!fs.existsSync(outPath)) {
           return reject(new Error('PDF olusturulamadi. Tarayici bassiz modda calisamamis olabilir.'));
         }
-        resolve(fs.readFileSync(outPath));
+        const buf = fs.readFileSync(outPath);
+        // Yarim PDF de basariyla karistirilmasin: %PDF- ile baslar, %%EOF ile biter.
+        if (buf.length < 200 || buf.slice(0, 5).toString('latin1') !== '%PDF-') {
+          return reject(new Error('Uretilen PDF bozuk (gecerli bir PDF basligi yok). Tekrar dene.'));
+        }
+        if (buf.lastIndexOf(Buffer.from('%%EOF', 'latin1')) < 0) {
+          return reject(new Error(
+            'Uretilen PDF YARIM - dosya sonu isareti (%%EOF) yok'
+            + (err ? ` (${err.message})` : '') + '. Tekrar dene.'
+          ));
+        }
+        resolve(buf);
       } catch (err) {
         reject(err);
       } finally {
@@ -325,12 +336,31 @@ function svgToPng(svg, width, height, options = {}) {
       `--screenshot=${outPath}`,
       `--window-size=${width},${height}`,
       `file:///${htmlPath.split(String.fromCharCode(92)).join('/')}`,
-    ], { timeout: 120000 }, () => {
+    ], { timeout: 120000 }, (err) => {
       try {
         if (!fs.existsSync(outPath)) {
           return reject(new Error('PNG olusturulamadi. Tarayici bassiz modda calisamamis olabilir.'));
         }
         const buf = fs.readFileSync(outPath);
+
+        /* YARIM DOSYAYI YAKALA
+         * Chrome zaman asimina ugrar veya olduruleyse yarim bir PNG kalabiliyor
+         * ve bu dosya "basarili" sayilip baskiya hazir diye kaydediliyordu -
+         * hatayi ancak matbaa veya musteri fark ediyordu.
+         * PNG her zaman 8 baytlik imzayla baslar ve IEND parcasiyla biter.
+         */
+        const IMZA = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        const bitis = Buffer.from('IEND', 'latin1');
+        if (buf.length < 100 || !buf.slice(0, 8).equals(IMZA)) {
+          return reject(new Error('Uretilen PNG bozuk (gecerli bir PNG basligi yok). Tekrar dene.'));
+        }
+        if (buf.lastIndexOf(bitis) < 0) {
+          return reject(new Error(
+            'Uretilen PNG YARIM - dosya sonu parcasi (IEND) yok. Tarayici islemi tamamlayamadi'
+            + (err ? ` (${err.message})` : '') + '. Tekrar dene; surerse tasarimi sadelestir.'
+          ));
+        }
+
         // Baskiya giden dosya kendi cozunurlugunu soylesin - Chrome bunu yazmiyor.
         resolve(options.dpi === 0 ? buf : setPngDpi(buf, options.dpi || 300));
       } catch (err) {

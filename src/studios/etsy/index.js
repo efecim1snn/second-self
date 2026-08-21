@@ -42,6 +42,23 @@ const MOCKUP_ESLEME = {
   telefon: 'poster',
 };
 
+/**
+ * BIR IS = BIR KLASOR
+ *
+ * Her rota kendi createJobFolder'ini cagiriyordu: tek bir tisortu Etsy'ye
+ * koymak masaustunde UC ayri klasor acabiliyordu (tasarim / listeleme
+ * gorseli / PDF) ve hangi metnin hangi gorsele ait oldugu klasor adindan
+ * anlasilmiyordu. Panel artik son is klasorunun adini gonderiyor; varsa
+ * ona yaziliyor, yoksa yenisi aciliyor.
+ */
+function isKlasoru(devam, studio, baslik) {
+  if (devam) {
+    const mevcut = output.reuseJobFolder(devam);
+    if (mevcut) return mevcut;
+  }
+  return output.createJobFolder({ studio, title: baslik });
+}
+
 /** Etsy listeleme metnini dosyaya yazilacak bicime cevirir. */
 function listelemeMetni(l, size) {
   if (!l) return '';
@@ -158,7 +175,7 @@ module.exports = {
       try {
         // Tasarim metni `lines` dizisinde geliyor (STUDIO_FORMS.etsy.fields).
         const ilkSatir = Array.isArray(d.lines) ? d.lines.find(Boolean) : d.lines;
-        job = output.createJobFolder({ studio: 'etsy', title: ilkSatir || 'tasarim' });
+        job = isKlasoru(body.exportTo, 'etsy', ilkSatir || 'tasarim');
         if (job) {
           output.writeImage(job, buffer, { index: 1, ext: 'png', label: size.label });
           output.writeText(job, 'bilgi.txt', [
@@ -288,7 +305,7 @@ module.exports = {
       }
 
       const ilkSatir = Array.isArray(temel.lines) ? temel.lines.find(Boolean) : temel.lines;
-      const job = output.createJobFolder({ studio: 'etsy', title: `${ilkSatir || 'tasarim'} - toplu` });
+      const job = isKlasoru(body.exportTo, 'etsy', `${ilkSatir || 'tasarim'} - toplu`);
 
       const sonuclar = [];
       const hatalar = [];
@@ -435,7 +452,7 @@ module.exports = {
         : ['siyah'];
 
       const ilkSatir = Array.isArray(d.lines) ? d.lines.find(Boolean) : d.lines;
-      const job = output.createJobFolder({ studio: 'etsy', title: `${ilkSatir || 'tasarim'} - listeleme gorseli` });
+      const job = isKlasoru(body.exportTo, 'etsy', `${ilkSatir || 'tasarim'} - listeleme gorseli`);
 
       const uretilen = [];
       const duzeltmeler = [];
@@ -584,7 +601,7 @@ module.exports = {
       const kayit = store.saveImageBuffer(buffer, 'pdf');
 
       const ilkSatir = Array.isArray(d.lines) ? d.lines.find(Boolean) : d.lines;
-      const job = output.createJobFolder({ studio: 'etsy', title: `${ilkSatir || 'tasarim'} - PDF` });
+      const job = isKlasoru(body.exportTo, 'etsy', `${ilkSatir || 'tasarim'} - PDF`);
       let dosya = null;
       if (job) {
         dosya = output.writeImage(job, buffer, { index: 1, ext: 'pdf', label: size.label });

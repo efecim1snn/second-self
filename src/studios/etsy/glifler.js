@@ -567,4 +567,84 @@ const VARSAYILAN = {
   elyazisi: 0.684,
 };
 
-module.exports = { GLIFLER, VARSAYILAN };
+/* ------------------------------------------------- calisma anindaki olcum */
+
+/**
+ * BU TABLO WINDOWS'TA OLCULDU.
+ *
+ * Linux/macOS'ta ayni adli yazi tipi olmayabilir; orada tarayici baska bir
+ * fonta duser ve harf genislikleri DEGISIR - tablo yanlis olur, yazi ya
+ * tasar ya gereksiz kucuk kalir.
+ *
+ * measureGlyphs yazilmisti ama HIC CAGRILMIYORDU: font olcum sorununun
+ * cozumu hazir duruyordu, fisi takili degildi. Artik ilk kullanimda
+ * sistemdeki gercek fontlar olculuyor ve data/glif-tablo.json'a
+ * onbelleklenerek buradaki yedegin uzerine geciyor.
+ */
+
+const fs = require('fs');
+const path = require('path');
+
+let _onbellek = null;
+
+function onbellekDosyasi() {
+  // store'u burada require ediyoruz - dosya basinda etmek dongusel bagimlilik
+  // riski tasiyor (store -> ... -> glifler).
+  const store = require('../../store');
+  return path.join(store.DATA_DIR, 'glif-tablo.json');
+}
+
+/** Diskteki olcumu okur; yoksa null. */
+function olculmusTablo() {
+  if (_onbellek !== null) return _onbellek;
+  try {
+    const dosya = onbellekDosyasi();
+    if (fs.existsSync(dosya)) {
+      const veri = JSON.parse(fs.readFileSync(dosya, 'utf8'));
+      if (veri && veri.tablo && veri.platform === process.platform) {
+        _onbellek = veri.tablo;
+        return _onbellek;
+      }
+    }
+  } catch {}
+  _onbellek = false;
+  return false;
+}
+
+/**
+ * Sistemdeki fontlari olcup onbellege yazar.
+ * Sunucu acilisinda bir kez, arka planda cagriliyor - kullaniciyi bekletmez.
+ */
+async function olcVeKaydet() {
+  const raster = require('../../raster');
+  if (!raster.available()) return null;
+
+  const FONT_TANIM = {
+    kalin: { f: "'Arial Black','Segoe UI',Impact,sans-serif", w: 900 },
+    daktilo: { f: "'Courier New',monospace", w: 700 },
+    serif: { f: "Georgia,'Times New Roman',serif", w: 700 },
+    elyazisi: { f: "'Segoe Script','Comic Sans MS',cursive", w: 700 },
+  };
+
+  const tablo = {};
+  for (const [ad, x] of Object.entries(FONT_TANIM)) {
+    tablo[ad] = await raster.measureGlyphs(x.f, x.w);
+  }
+
+  const store = require('../../store');
+  store.ensureDirs();
+  fs.writeFileSync(onbellekDosyasi(), JSON.stringify({
+    platform: process.platform,
+    olculdu: new Date().toISOString(),
+    tablo,
+  }, null, 1), 'utf8');
+  _onbellek = tablo;
+  return tablo;
+}
+
+/** design.js bunu kullanir: olculmus varsa o, yoksa gomulu yedek. */
+function tablo() {
+  return olculmusTablo() || GLIFLER;
+}
+
+module.exports = { GLIFLER, VARSAYILAN, tablo, olcVeKaydet, olculmusTablo };

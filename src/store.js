@@ -57,7 +57,7 @@ let _tmpSeq = 0;
  * async olmayan bir .map() icinde cagiriyor. Store async'e cevrilirse o satir
  * promise'i sessizce yutar ve kare hic kaydedilmez.
  */
-function withLock(file, fn, { timeoutMs = 8000, staleMs = 30000 } = {}) {
+function withLock(file, fn, { timeoutMs = 8000, staleMs = 5000 } = {}) {
   const lockFile = `${file}.lock`;
   const basladi = Date.now();
   let fd = null;
@@ -75,6 +75,10 @@ function withLock(file, fn, { timeoutMs = 8000, staleMs = 30000 } = {}) {
       if (!['EEXIST', 'EPERM', 'EACCES'].includes(err.code)) throw err;
 
       // Sahibi olmus bir kilit sonsuza kadar beklenmesin.
+      // staleMs 30 sn'den 5 sn'ye indirildi: kilit tutan islem zaten
+      // SENKRON ve milisaniyeler suruyor, 5 saniye fazlasiyla yeterli.
+      // 30 sn iken paneli sert kapatip hemen acan kullanici 8 saniye
+      // donma yasiyordu.
       let yas = null;
       try {
         yas = Date.now() - fs.statSync(lockFile).mtimeMs;
@@ -87,9 +91,13 @@ function withLock(file, fn, { timeoutMs = 8000, staleMs = 30000 } = {}) {
         continue;
       }
       if (Date.now() - basladi > timeoutMs) {
+        // Mesaj eskiden kesin bir dille "ikinci panel acik" diyordu ve
+        // kullaniciyi olmayan bir pencereyi aramaya yonlendiriyordu. Sert
+        // kapanmadan sonra kalan bayat kilit de ayni hatayi veriyordu.
         throw new Error(
-          `${path.basename(file)} dosyasi baska bir surec tarafindan kilitli. ` +
-          'Ayni klasorden ikinci bir panel acik olabilir.'
+          `${path.basename(file)} dosyasi kilitli kaldi. Iki ihtimal: ayni klasorden ` +
+          'ikinci bir panel acik, ya da panel daha once sert kapatilip kilit dosyasi ' +
+          `geride kalmis. Ikincisiyse data/${path.basename(file)}.lock dosyasini silip tekrar dene.`
         );
       }
       Atomics.wait(KILIT_BEKLE, 0, 0, 25);
@@ -277,11 +285,36 @@ function getGalleryPage(limit = 60) {
   return getGallery().slice(0, Math.max(Number(limit) || 60, 1));
 }
 
+/**
+ * GORSEL DOSYASI DA JSON GIBI GUVENLI YAZILIR.
+ *
+ * Dayaniklilik tersine kuruluydu: galeri KAYDI atomik olarak diske
+ * iniyordu (updateJson + fsync) ama kaydin gosterdigi GORSEL duz
+ * writeFileSync ile yaziliyordu. Yani surec tam o anda kapanirsa kayit
+ * kalici, gorsel yarim - panel bozuk bir kareyi "hazir" diye gosteriyordu.
+ *
+ * Artik once gecici ada yazilip fsync ediliyor, sonra yerine tasiniyor.
+ */
 function saveImageBuffer(buffer, ext = 'png') {
   ensureDirs();
   const id = `img_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`;
   const filename = `${id}.${ext}`;
-  fs.writeFileSync(path.join(IMAGES_DIR, filename), buffer);
+  const hedef = path.join(IMAGES_DIR, filename);
+  const tmp = `${hedef}.${process.pid}.${++_tmpSeq}.tmp`;
+
+  const fd = fs.openSync(tmp, 'w');
+  try {
+    fs.writeFileSync(fd, buffer);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  try {
+    fs.renameSync(tmp, hedef);
+  } catch (err) {
+    try { fs.unlinkSync(tmp); } catch {}
+    throw err;
+  }
   return { id, filename, url: `/gorseller/${filename}` };
 }
 
