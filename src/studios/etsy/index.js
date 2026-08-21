@@ -336,6 +336,70 @@ module.exports = {
       items: store.getGallery().filter((g) => g.studio === 'etsy').slice(0, 200),
     }),
 
+    /**
+     * PDF CIKTISI - vektor, YAZI TIPI GOMULU.
+     *
+     * SVG'nin sorunu yazi tipini tasimamasiydi; PNG onu cozuyor ama vektor
+     * olmaktan cikiyor. PDF ikisini birden veriyor: Chrome kullanilan fontu
+     * PDF'e gomuyor (dogrulandi: /BaseFont /AAAAAA+Arial-Black), metin vektor
+     * kaliyor. Bircok matbaa zaten PDF istiyor.
+     */
+    'POST /pdf': async (body) => {
+      const d = body.design || {};
+      const size = design.SIZES[d.size] || design.SIZES.tisort;
+      const buffer = await render.svgToPdf(design.toSvg(d), size.w, size.h, { dpi: 300 });
+
+      const ilkSatir = Array.isArray(d.lines) ? d.lines.find(Boolean) : d.lines;
+      const job = output.createJobFolder({ studio: 'etsy', title: `${ilkSatir || 'tasarim'} - PDF` });
+      let dosya = null;
+      if (job) {
+        dosya = output.writeImage(job, buffer, { index: 1, ext: 'pdf', label: size.label });
+        output.writeText(job, 'bilgi.txt', [
+          'SECOND SELF - PDF cikti',
+          '=======================', '',
+          `Tarih : ${new Date().toLocaleString('tr-TR')}`,
+          `Olcu  : ${size.w}x${size.h} piksel = ${(size.w / 300).toFixed(2)}x${(size.h / 300).toFixed(2)} inc @300DPI`,
+          '',
+          'Bu PDF vektordur ve kullanilan yazi tipi dosyaya GOMULUDUR -',
+          'baskicida o font kurulu olmasa da tasarim ayni gorunur.',
+        ].join('\n'));
+      }
+      return {
+        size,
+        bytes: buffer.length,
+        export: job ? { name: job.name, path: job.path } : null,
+        dosya,
+      };
+    },
+
+    /* ------------------------------------------------- gorunum sablonlari */
+
+    /**
+     * Magaza tutarliligi Etsy'de dogrudan satis unsuru: alici bir tasarimi
+     * begenip magazaya girdiginde ayni dili gormeli. Begenilen palet + font +
+     * dizilim birlesimi F5'te kaybolmasin diye saklaniyor.
+     */
+    'GET /sablonlar': async () => ({ sablonlar: store.getDesignTemplates('etsy') }),
+
+    'POST /sablon/kaydet': async (body) => {
+      const ad = String(body.ad || '').trim();
+      if (!ad) throw badRequest('Sablona bir ad ver.');
+      const d = body.design || {};
+      return {
+        sablonlar: store.saveDesignTemplate('etsy', {
+          ad,
+          layout: d.layout,
+          palette: d.palette,
+          font: d.font,
+          uppercase: d.uppercase,
+        }),
+      };
+    },
+
+    'POST /sablon/sil': async (body) => ({
+      sablonlar: store.deleteDesignTemplate('etsy', body.ad),
+    }),
+
     'POST /listeleme': async (body) => {
       const built = listing.build(body.listing || {});
       if (!built.title) throw badRequest('Once tasarimdaki sozu gir.');

@@ -120,7 +120,20 @@ function toSvg(d = {}) {
   if (d.sub) {
     const ss = base * 0.042;
     const perLine = Math.max(14, Math.floor(boxW / (ss * 0.5)));
+
+    /* CARPISMA KAPISI
+     * Cagri butonu ve alt satir asagida SABIT konumda duruyor, ama akan
+     * y imleci hicbir yerde onlarla karsilastirilmiyordu: uzun alt metin
+     * butonun ve footer'in UZERINE yaziliyordu (olculdu: x_post'ta alt
+     * metin y=822'ye inip y=652..755 arasindaki butonu eziyordu).
+     * Artik akan metin, altta ayrilmis alana girmeden duruyor.
+     */
+    const butonYuk = d.cta ? base * 0.115 : 0;
+    const footerYuk = d.footer ? base * 0.075 : 0;
+    const altSinir = H - pad - butonYuk - footerYuk - base * 0.04;
+
     for (const line of wrap(d.sub, perLine).slice(0, 4)) {
+      if (y + ss * 1.35 > altSinir) break;   // sigmiyorsa yazma, ezme
       y += ss * 1.35;
       T(line, { y, size: ss, weight: 400, fill: t.dim });
     }

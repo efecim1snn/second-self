@@ -33,6 +33,18 @@ const LAYOUTS = {
     label: 'Minimal tek satir',
     hint: 'Tek guclu kelime, genis harf araligi.',
   },
+  blok: {
+    label: 'Blok (satirlar esit genislikte)',
+    hint: 'POD tipografisinin klasigi: her satir ayni genisligi doldurur. Olculmus harf genisligi olmadan kurulamaz.',
+  },
+  kontur: {
+    label: 'Kontur (ici bos)',
+    hint: 'Yalnizca dis cizgi. Koyu urunde ince ve pahali durur.',
+  },
+  rozet: {
+    label: 'Rozet (dairesel)',
+    hint: 'Ust yay + alt yay + ortada satir. Kulup/est. tarzi tasarimlar icin.',
+  },
 };
 
 const PALETTES = {
@@ -58,13 +70,34 @@ const FONTS = {
   elyazisi: { label: 'El yazisi hissi', family: "'Segoe Script','Comic Sans MS',cursive", weight: 700 },
 };
 
-/** POD baski alani olculeri (piksel, 300 DPI). */
+/**
+ * POD BASKI ALANI OLCULERI
+ *
+ * Hepsi 300 DPI'da INC olcusunden turetildi ve etikette inc karsiligi yaziyor -
+ * boylece kendi saglayicinin urun sayfasindaki baski alaniyla karsilastirabilirsin.
+ *
+ * ONEMLI: gercek baski alani SAGLAYICIYA ve URUNE gore degisir. Printful ve
+ * Printify kendi urun sayfalarinda kesin olcuyu veriyor; buradakiler yaygin
+ * standartlardir, kesin dogru degil. Uretmeden once dogrula.
+ *
+ * DPI notu (saglayici dokumanlarindan): kagit urunler, kupa, telefon kilifi ve
+ * sticker 300 DPI ister; DTG (dogrudan kumasa baski) 150 DPI'da da kabul eder;
+ * battaniye/tayt gibi buyuk formatlar 120-150 DPI ile calisir.
+ */
 const SIZES = {
-  tisort: { label: 'Tisort / hoodie', w: 4500, h: 5400 },
-  kare: { label: 'Kare (canta, yastik)', w: 4500, h: 4500 },
-  kupa: { label: 'Kupa sargisi', w: 2475, h: 1155 },
-  poster: { label: 'Poster 2:3', w: 3600, h: 5400 },
+  tisort: { label: 'Tisort / hoodie on (15x18")', w: 4500, h: 5400 },
+  gogus: { label: 'Sol gogus (4x4")', w: 1200, h: 1200 },
+  hoodieArka: { label: 'Hoodie arka (12x16")', w: 3600, h: 4800 },
+  kare: { label: 'Kare - canta, yastik (15x15")', w: 4500, h: 4500 },
+  kupa: { label: 'Kupa sargisi (8.25x3.85")', w: 2475, h: 1155 },
+  sticker: { label: 'Sticker (3x3")', w: 900, h: 900 },
+  telefon: { label: 'Telefon kilifi (3x6")', w: 900, h: 1800 },
+  poster: { label: 'Poster 12x18"', w: 3600, h: 5400 },
+  posterBuyuk: { label: 'Poster 18x24"', w: 5400, h: 7200 },
 };
+
+/** Toplu uretimde varsayilan olarak uretilen dort urun. */
+const TOPLU_VARSAYILAN = ['tisort', 'kare', 'kupa', 'poster'];
 
 function esc(s) {
   return String(s == null ? '' : s)
@@ -157,7 +190,9 @@ function toSvg(d) {
   const lineGap = 1.12;
   const unit = boxH / (text.length * lineGap);
   // Kutuya sigan en buyuk punto: en genis SATIR belirler (harf sayisi degil).
-  const enGenisEm = Math.max(...text.map((t) => widthEm(t, fontKey)));
+  // Harf araligi metni genisletir; punto secilirken hesaba katilmali.
+  const arayaEk = (t) => (layout === 'minimal' ? Math.max(String(t).length - 1, 0) * 0.18 : 0);
+  const enGenisEm = Math.max(...text.map((t) => widthEm(t, fontKey) + arayaEk(t)));
   // SERIT dizilimi metnin iki yanina 0.25em dolgu koyuyor; punto secilirken
   // bu hesaba katilmazsa bant guvenli alani asiyor, bant kirpilinca da metin
   // bandin disinda kaliyordu.
@@ -169,11 +204,23 @@ function toSvg(d) {
   const totalH = text.length * fontSize * lineGap;
   const startY = (size.h - totalH) / 2 + fontSize * 0.82;
 
-  const common = `font-family="${font.family}" font-weight="${font.weight}" text-anchor="middle"`;
+  /* HARF ARALIGI (B2)
+   * Eskiden `letter-spacing="-2"` gibi KULLANICI BIRIMI yaziliyordu; 4500px
+   * tuvalde punto ~1600 iken 2 birim em'in binde biri eder - dort yazi
+   * tipinde de fiilen sifirdi. Ustelik "minimal" dizilimin ipucu "genis harf
+   * araligi" vaat ediyordu ama kod harf araligina hic dokunmuyordu.
+   * Artik aralik EM'e bagli ve genislik hesabina da katiliyor.
+   */
+  const araliktEm = layout === 'minimal' ? 0.18 : (font.trackingEm || 0);
+  const arayaz = araliktEm ? ` letter-spacing="${(araliktEm * fontSize).toFixed(1)}"` : '';
+  const common = `font-family="${font.family}" font-weight="${font.weight}" text-anchor="middle"${arayaz}`;
   const parts = [];
 
   if (layout === 'cerceve') {
-    const m = Math.round(Math.min(padX, padY) * 0.55);
+    // Cerceve guvenli alanin DISINDA, kenarla marj arasinda duruyor.
+    // Eskiden marjin %55'ine oturuyordu, yani kodun kendi guvenli alaninin
+    // yarisini yiyordu; kesimde bir kenar otekinden kalin cikiyordu.
+    const m = Math.round(Math.min(padX, padY) * 0.45);
     const sw = Math.max(6, Math.round(size.w * 0.006));
     parts.push(`<rect x="${m}" y="${m}" width="${size.w - m * 2}" height="${size.h - m * 2}" fill="none" stroke="${pal.accent}" stroke-width="${sw}"/>`);
     parts.push(`<rect x="${m + sw * 3}" y="${m + sw * 3}" width="${size.w - (m + sw * 3) * 2}" height="${size.h - (m + sw * 3) * 2}" fill="none" stroke="${pal.accent}" stroke-width="${Math.round(sw / 2)}"/>`);
@@ -236,6 +283,93 @@ function toSvg(d) {
       const y = arcBaseY + satirBoyu * lineGap * (i + 1);
       parts.push(`<text x="${cx}" y="${y.toFixed(1)}" ${common} font-size="${satirBoyu.toFixed(1)}" fill="${pal.ink}">${esc(line)}</text>`);
     });
+  } else if (layout === 'rozet') {
+    /* ROZET - ust yay + ortadaki satir(lar) + alt yay.
+     * Alt yay TERS yonde cizilir (sweep 0) ki harfler dogru dursun.
+     */
+    const yc = size.h / 2;
+    /* Cember uzerindeki metin yaricapin DISINA dogru uzuyor (harfler yolun
+     * uzerinde durup yukari cikiyor). Olculdu: tam yaricapla metin guvenli
+     * marji 200px deliyordu. Yaricap, uzerine binecek yazi kadar kucultuluyor.
+     */
+    const rr = Math.min(boxW, boxH) / 2 * 0.84;
+    const ustEm = widthEm(text[0], fontKey);
+    const altEm = text.length > 2 ? widthEm(text[text.length - 1], fontKey) : 0;
+
+    // Yay uzunlugu ~ cemberin ucte biri; punto ona sigmali.
+    const yayPay = (Math.PI * rr) * 0.55;
+    const cemberFont = Math.min(fontSize * 0.5, yayPay / Math.max(ustEm, 0.1));
+
+    const id = idFor(d, size);
+    parts.push(`<defs>`
+      + `<path id="ust-${id}" d="M ${(cx - rr).toFixed(1)} ${yc.toFixed(1)} A ${rr.toFixed(1)} ${rr.toFixed(1)} 0 0 1 ${(cx + rr).toFixed(1)} ${yc.toFixed(1)}" fill="none"/>`
+      + `<path id="alt-${id}" d="M ${(cx - rr).toFixed(1)} ${yc.toFixed(1)} A ${rr.toFixed(1)} ${rr.toFixed(1)} 0 0 0 ${(cx + rr).toFixed(1)} ${yc.toFixed(1)}" fill="none"/>`
+      + `</defs>`);
+
+    // Ince halka - rozet hissini veren sey.
+    const halka = Math.max(4, fontSize * 0.045);
+    parts.push(`<circle cx="${cx}" cy="${yc.toFixed(1)}" r="${(rr * 0.995).toFixed(1)}" fill="none" stroke="${pal.accent}" stroke-width="${halka.toFixed(1)}"/>`);
+
+    parts.push(`<text ${common} font-size="${cemberFont.toFixed(1)}" fill="${pal.accent}"><textPath href="#ust-${id}" startOffset="50%">${esc(text[0])}</textPath></text>`);
+    if (altEm) {
+      const altFont = Math.min(cemberFont, yayPay / Math.max(altEm, 0.1));
+      parts.push(`<text ${common} font-size="${altFont.toFixed(1)}" fill="${pal.accent}"><textPath href="#alt-${id}" startOffset="50%">${esc(text[text.length - 1])}</textPath></text>`);
+    }
+
+    // Ortadaki satirlar
+    const orta = text.slice(1, altEm ? -1 : undefined);
+    if (orta.length) {
+      const ortaEm = Math.max(...orta.map((t) => widthEm(t, fontKey)));
+      const ortaFont = Math.min(fontSize, (rr * 1.2) / ortaEm, (rr * 0.9) / (orta.length * lineGap));
+      const ortaH = orta.length * ortaFont * lineGap;
+      const ortaY = yc - ortaH / 2 + ortaFont * 0.82;
+      orta.forEach((line, i) => {
+        parts.push(`<text x="${cx}" y="${(ortaY + ortaFont * lineGap * i).toFixed(1)}" ${common} font-size="${ortaFont.toFixed(1)}" fill="${pal.ink}">${esc(line)}</text>`);
+      });
+    }
+  } else if (layout === 'blok') {
+    /* BLOK - her satir AYNI genisligi doldurur.
+     * POD tipografisinin en tanidik kalibi. Bunu kurabilmemizin tek sebebi
+     * artik her satirin gercek genisligini biliyor olmamiz: satir basina
+     * ayri punto seciliyor ki hepsi boxW'ye otursun.
+     */
+    // Blok, satirlari kutunun TAMAMINA yaydigi icin glif tasmasina en duyarli
+    // dizilim: olculdu, genel payin ustune %4 daha gerekiyor (serif 'SOURDOUGH'
+    // gibi genis kuyruklu kelimelerde bbox ilerleme genisligini asiyor).
+    const blokPay = 0.96;
+    // TEK HARFLIK SATIR TUZAGI: "I" gibi dar bir satiri kutu genisligine
+    // yaymak devasa bir punto uretiyor ve harf dikeyde tasiyor. Satir basina
+    // punto, esit paylasimin 1.6 katiyla siniriliyor - blok gorunumu korunur
+    // ama tek harf sayfayi yutmaz.
+    const esitPay = boxH / (text.length * lineGap);
+    const puntolar = text.map((line) => {
+      const em = widthEm(line, fontKey);
+      return Math.min((boxW * blokPay) / Math.max(em, 0.1), esitPay * 1.6);
+    });
+    // Toplam yukseklik guvenli alani asarsa hepsini ayni oranda kucult.
+    const toplam = puntolar.reduce((a, p) => a + p * lineGap, 0);
+    const olcek = toplam > boxH ? boxH / toplam : 1;
+
+    let y = (size.h - toplam * olcek) / 2;
+    text.forEach((line, i) => {
+      const p = puntolar[i] * olcek;
+      y += p * 0.82;
+      const fill = i % 2 === 1 ? pal.accent : pal.ink;
+      parts.push(`<text x="${cx}" y="${y.toFixed(1)}" ${common} font-size="${p.toFixed(1)}" fill="${fill}">${esc(line)}</text>`);
+      y += p * (lineGap - 0.82);
+    });
+  } else if (layout === 'kontur') {
+    /* KONTUR - yalnizca dis cizgi, ici bos.
+     * Koyu urunlerde ince durur ve MUREKKEP AZ HARCAR (bazi POD
+     * saglayicilarinda dolgu alani fiyati etkiliyor).
+     */
+    const kalinlik = Math.max(3, fontSize * 0.035);
+    text.forEach((line, i) => {
+      const y = startY + fontSize * lineGap * i;
+      parts.push(`<text x="${cx}" y="${y.toFixed(1)}" ${common} font-size="${fontSize.toFixed(1)}"`
+        + ` fill="none" stroke="${i === text.length - 1 ? pal.accent : pal.ink}"`
+        + ` stroke-width="${kalinlik.toFixed(1)}" stroke-linejoin="round">${esc(line)}</text>`);
+    });
   } else {
     text.forEach((line, i) => {
       const y = startY + fontSize * lineGap * i;
@@ -273,4 +407,4 @@ function options() {
   };
 }
 
-module.exports = { toSvg, options, widthEm, SIZES, PALETTES, LAYOUTS, FONTS };
+module.exports = { toSvg, options, widthEm, SIZES, TOPLU_VARSAYILAN, PALETTES, LAYOUTS, FONTS };

@@ -40,6 +40,64 @@ function available() {
   return !!findBrowser();
 }
 
+/**
+ * SVG -> PDF (VEKTOR, YAZI TIPI GOMULU)
+ *
+ * SVG'nin POD'daki buyuk sorunu: dosya yazi tipinin yalnizca ADINI tasir.
+ * Baskicida o font yoksa metin baska bir fontla cizilir ve tasarim bozulur.
+ * PNG bunu cozer ama vektor olmaktan cikar.
+ *
+ * PDF ikisini birden verir: Chrome kendi PDF ciktisina kullanilan yazi
+ * tipini GOMER, metin vektor kalir, her yerde ayni gorunur. Bircok matbaa
+ * zaten PDF istiyor.
+ *
+ * Olculer inc cinsinden verilir cunku PDF'in birimi nokta (1/72 inc);
+ * 300 DPI'lik piksel olcusunu 300'e bolerek inc buluyoruz.
+ */
+function svgToPdf(svg, width, height, options = {}) {
+  return new Promise((resolve, reject) => {
+    const browser = findBrowser();
+    if (!browser) {
+      return reject(new Error('PDF uretmek icin sistemde Chrome veya Edge bulunamadi.'));
+    }
+    const dpi = Number(options.dpi) || 300;
+    const incW = width / dpi;
+    const incH = height / dpi;
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'podpdf-'));
+    const htmlPath = path.join(dir, 'd.html');
+    const outPath = path.join(dir, 'd.pdf');
+
+    // @page ile sayfa tam tasarim olcusunde; kenar boslugu yok.
+    fs.writeFileSync(htmlPath,
+      `<!doctype html><meta charset="utf-8">
+       <style>
+         @page { size: ${incW}in ${incH}in; margin: 0; }
+         html,body { margin:0; padding:0; }
+         svg { display:block; width:${incW}in; height:${incH}in; }
+       </style>${svg}`, 'utf8');
+
+    execFile(browser, [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-pdf-header-footer',
+      `--print-to-pdf=${outPath}`,
+      `file:///${htmlPath.split(String.fromCharCode(92)).join('/')}`,
+    ], { timeout: 120000 }, () => {
+      try {
+        if (!fs.existsSync(outPath)) {
+          return reject(new Error('PDF olusturulamadi. Tarayici bassiz modda calisamamis olabilir.'));
+        }
+        resolve(fs.readFileSync(outPath));
+      } catch (err) {
+        reject(err);
+      } finally {
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+      }
+    });
+  });
+}
+
 /* --------------------------------------------------------- glif olcumu */
 
 /**
@@ -284,4 +342,4 @@ function svgToPng(svg, width, height, options = {}) {
   });
 }
 
-module.exports = { svgToPng, available, findBrowser, setPngDpi, crc32, measureGlyphs };
+module.exports = { svgToPng, svgToPdf, available, findBrowser, setPngDpi, crc32, measureGlyphs };

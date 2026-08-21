@@ -331,6 +331,40 @@ function galleryUsesFile(filename) {
   return getGallery().filter((i) => i && path.basename(String(i.filename || '')) === safe).length;
 }
 
+/* --------------------------------------------------- tasarim sablonlari */
+
+const TEMPLATE_FILE = path.join(DATA_DIR, 'sablonlar.json');
+
+/**
+ * Begenilen gorunum birlesimleri (palet + font + dizilim).
+ * Magaza tutarliligi Etsy'de satis unsuru; F5'te kaybolmamali.
+ */
+function getDesignTemplates(studio) {
+  const hepsi = readJson(TEMPLATE_FILE, {});
+  return Array.isArray(hepsi[studio]) ? hepsi[studio] : [];
+}
+
+function saveDesignTemplate(studio, sablon) {
+  const sonuc = updateJson(TEMPLATE_FILE, {}, (hepsi) => {
+    const liste = Array.isArray(hepsi[studio]) ? hepsi[studio] : [];
+    // Ayni ad varsa uzerine yaz - kullanici "guncelle" beklentisinde.
+    const kalan = liste.filter((s) => s.ad !== sablon.ad);
+    kalan.unshift({ ...sablon, at: new Date().toISOString() });
+    hepsi[studio] = kalan.slice(0, 30);
+    return hepsi;
+  });
+  return sonuc[studio] || [];
+}
+
+function deleteDesignTemplate(studio, ad) {
+  const sonuc = updateJson(TEMPLATE_FILE, {}, (hepsi) => {
+    const liste = Array.isArray(hepsi[studio]) ? hepsi[studio] : [];
+    hepsi[studio] = liste.filter((s) => s.ad !== ad);
+    return hepsi;
+  });
+  return sonuc[studio] || [];
+}
+
 /* --------------------------------------------------------------- sifirlama */
 
 /**
@@ -416,6 +450,9 @@ module.exports = {
   saveGallery,
   addGalleryItem,
   getGalleryPage,
+  getDesignTemplates,
+  saveDesignTemplate,
+  deleteDesignTemplate,
   saveImageBuffer,
   readImageBuffer,
   trashImageFile,

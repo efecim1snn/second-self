@@ -1329,12 +1329,16 @@ async function renderStudioDesign(studioId) {
         <div class="row">
           <button type="button" class="btn" id="dgen">PNG uret</button>
           ${studioId === 'etsy' ? '<button type="button" class="ghost" id="dtoplu">4 urunde birden uret</button>' : ''}
+          ${studioId === 'etsy' ? '<button type="button" class="ghost" id="dpdf">PDF (vektor)</button>' : ''}
           <button type="button" class="ghost" id="dsvg">SVG indir</button>
         </div>
         ${studioId === 'etsy' ? `<p class="help">
           <b>4 urunde birden:</b> tisort, kare (canta/yastik), kupa ve poster - hepsi tek klasore,
-          her biri kendi Etsy listeleme metniyle (urun kelimesi degisince etiketler de degisiyor).
-        </p>` : ''}
+          her biri kendi Etsy listeleme metniyle (urun kelimesi degisince etiketler de degisiyor).<br>
+          <b>PDF:</b> vektor cikti ve <b>yazi tipi dosyaya gomulu</b> - baskicida o font kurulu
+          olmasa bile tasarim ayni gorunur. Cogu matbaa PDF istiyor.
+        </p>
+        <div id="dsablon"></div>` : ''}
       </div>
       <div class="card">
         <h2>Onizleme</h2>
@@ -1350,6 +1354,13 @@ async function renderStudioDesign(studioId) {
       </div>
     </div>
     <div id="dout"></div>`;
+
+  // Istek sayaci EN BASTA tanimlanmali: preview() bir fonksiyon bildirimi
+  // oldugu icin yukari cekiliyor ve asagida cagriliyor, ama `let` yukari
+  // cekilmiyor - sayac asagida tanimlanirsa ILK onizleme
+  // "Cannot access 'istekNo' before initialization" ile patliyordu.
+  // (Sonraki her duzenleme calistigi icin testte gorunmemisti.)
+  let istekNo = 0;
 
   const form = document.getElementById('dform');
   // Her tus vurusunda sunucuya gitmek yerine 140 ms bekle. Ayrica gec gelen
@@ -1369,6 +1380,75 @@ async function renderStudioDesign(studioId) {
 
   const toplu = document.getElementById('dtoplu');
   if (toplu) toplu.onclick = () => bulkDesign(studioId);
+
+  const pdfBtn = document.getElementById('dpdf');
+  if (pdfBtn) {
+    pdfBtn.onclick = async () => {
+      const out = document.getElementById('dout');
+      pdfBtn.disabled = true;
+      const eski = pdfBtn.textContent;
+      pdfBtn.innerHTML = '<span class="spin"></span>PDF';
+      try {
+        const r = await api('/api/etsy/pdf', { design: S.design[studioId] });
+        out.innerHTML = `${exportBar(r.export)}
+          <div class="card">
+            <h2>PDF hazir · ${(r.bytes / 1024).toFixed(0)} KB</h2>
+            <p class="help">${r.size.w}x${r.size.h} piksel = ${(r.size.w / 300).toFixed(2)}x${(r.size.h / 300).toFixed(2)} inc @300DPI.
+            Vektor, yazi tipi gomulu.</p>
+          </div>`;
+      } catch (err) {
+        out.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+      } finally { pdfBtn.disabled = false; pdfBtn.textContent = eski; }
+    };
+  }
+
+  // --- gorunum sablonlari (palet + font + dizilim)
+  if (studioId === 'etsy') {
+    const kutu = document.getElementById('dsablon');
+    const ciz = (liste) => {
+      kutu.innerHTML = `
+        <hr class="sep">
+        <div class="row" style="justify-content:space-between">
+          <b style="font-size:14px">Gorunum sablonlari</b>
+          <button type="button" class="ghost tiny" id="dsablonkaydet">Su anki gorunumu kaydet</button>
+        </div>
+        <p class="help">Palet + yazi tipi + dizilim birlesimi. Magaza tutarliligi Etsy'de satis unsuru.</p>
+        ${liste.length ? `<div class="nisler">${liste.map((s) => `
+          <span class="sablonrozet">
+            <button type="button" class="ghost tiny" data-sablon="${esc(s.ad)}">${esc(s.ad)}</button>
+            <button type="button" class="ghost tiny danger" data-sablonsil="${esc(s.ad)}" title="Sil">×</button>
+          </span>`).join('')}</div>`
+          : '<p class="dim">Henuz sablon yok.</p>'}`;
+
+      document.getElementById('dsablonkaydet').onclick = async () => {
+        const ad = prompt('Sablona bir ad ver (ornek: "magaza retro"):');
+        if (!ad) return;
+        try {
+          ciz((await api('/api/etsy/sablon/kaydet', { ad, design: S.design[studioId] })).sablonlar);
+          toast('Sablon kaydedildi.', 'ok');
+        } catch (err) { toast(err.message, 'bad'); }
+      };
+      kutu.querySelectorAll('[data-sablon]').forEach((b) => {
+        b.onclick = () => {
+          const s = liste.find((x) => x.ad === b.dataset.sablon);
+          if (!s) return;
+          S.design[studioId] = {
+            ...S.design[studioId],
+            layout: s.layout, palette: s.palette, font: s.font, uppercase: s.uppercase,
+          };
+          toast('Sablon uygulandi.', 'ok');
+          render();
+        };
+      });
+      kutu.querySelectorAll('[data-sablonsil]').forEach((b) => {
+        b.onclick = async () => {
+          try { ciz((await api('/api/etsy/sablon/sil', { ad: b.dataset.sablonsil })).sablonlar); }
+          catch (err) { toast(err.message, 'bad'); }
+        };
+      });
+    };
+    api('/api/etsy/sablonlar').then((r) => ciz(r.sablonlar)).catch(() => { kutu.innerHTML = ''; });
+  }
 
   const varyantBtn = document.getElementById('dvaryant');
   if (varyantBtn) {
@@ -1403,7 +1483,6 @@ async function renderStudioDesign(studioId) {
 
   preview();
 
-  let istekNo = 0;
   async function preview() {
     const box = document.getElementById('dprev');
     if (!box) return;
@@ -1510,7 +1589,11 @@ function satirUyarisi(studioId, spec) {
 
 function collectDesign(studioId, spec) {
   const d = S.design[studioId] || {};
-  document.querySelectorAll('[data-d]').forEach((el) => {
+  // TARAMA FORMLA SINIRLI. Eskiden tum belge taraniyordu; varyant seridi ve
+  // sablon paneli eklendikten sonra ayni data-d adini tasiyan baska bir alan
+  // tasarimi sessizce ezebilirdi.
+  const kapsam = document.getElementById('dform') || document;
+  kapsam.querySelectorAll('[data-d]').forEach((el) => {
     const f = spec.fields.find((x) => x.key === el.dataset.d);
     if (f && f.type === 'boolean') d[el.dataset.d] = el.checked;
     else if (f && f.type === 'lines') d[el.dataset.d] = el.value.split('\n').map((x) => x.trim()).filter(Boolean);
@@ -1564,7 +1647,8 @@ async function generateDesign(studioId) {
     const body = { design: S.design[studioId] };
     if (studioId === 'etsy' && S.listing) body.listing = S.listing;
     const r = await api('/api/' + studioId + '/uret', body);
-    out.innerHTML = `<div class="card">
+    out.innerHTML = `${exportBar(r.export)}
+    <div class="card">
       <h2>Hazir · ${r.size.w}x${r.size.h}${r.dpi ? ' @' + r.dpi + 'DPI' : ''}${r.transparent ? ' · seffaf' : ''}</h2>
       <div class="gallery"><div class="shot">
         <img src="${esc(r.image.url)}">
@@ -1586,7 +1670,7 @@ async function generateDesign(studioId) {
 }
 
 async function renderEtsyListing() {
-  if (!S.listing) S.listing = { phrase: '', niche: '', size: 'tisort', audience: '', keywords: [] };
+  if (!S.listing) S.listing = { phrase: '', niche: '', size: 'tisort', audience: '', keywords: [], delivery: undefined };
   const l = S.listing;
 
   // TASARIMDAKI SOZ OTOMATIK GELIR. Eskiden kullanici ayni sozu iki kez
@@ -1612,6 +1696,15 @@ async function renderEtsyListing() {
           <p class="help">Turkce yazabilirsin - kutuphanedekiler Ingilizceye cevrilir (kedi -> cat).</p>
         </div>
         <div class="field"><label>Hedef kitle</label><input id="l_aud" value="${esc(l.audience)}" placeholder="for women"></div>
+        <div class="field">
+          <label>Ne satiyorsun?</label>
+          <select id="l_delivery">
+            <option value="">- sec -</option>
+            <option value="fiziksel" ${l.delivery === 'fiziksel' ? 'selected' : ''}>Basili urun (kargolanacak)</option>
+            <option value="dijital" ${l.delivery === 'dijital' ? 'selected' : ''}>Dijital dosya (indirilecek)</option>
+          </select>
+          <p class="help">Aciklama buna gore yazilir. Baslik tisort satip aciklama PNG teslim ederse alici iade acar.</p>
+        </div>
       </div>
       <div class="field"><label>Anahtar kelimeler (virgulle ayir)</label>
         <input id="l_kw" value="${esc((l.keywords || []).join(', '))}" placeholder="cat mom, crazy cat lady"></div>
@@ -1675,6 +1768,7 @@ async function renderEtsyListing() {
       niche: document.getElementById('l_niche').value,
       audience: document.getElementById('l_aud').value,
       keywords: document.getElementById('l_kw').value.split(',').map((x) => x.trim()).filter(Boolean),
+      delivery: document.getElementById('l_delivery').value || undefined,
       size: (S.design.etsy || {}).size || 'tisort',
     };
     try {

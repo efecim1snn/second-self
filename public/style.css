@@ -521,3 +521,5 @@ button.ghost.danger:hover { background: rgba(255,77,109,.1); }
   justify-content: center;
 }
 .varyantgorsel svg { max-height: 120px; }
+
+.sablonrozet { display: inline-flex; gap: 2px; align-items: center; }
