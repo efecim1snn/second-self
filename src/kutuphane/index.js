@@ -175,8 +175,12 @@ function denetle(kayit) {
   for (const a of ALANLAR) {
     if (kayit[a] && kayit[a].length > 160) sorunlar.push(`${a} 160 karakteri asiyor`);
   }
+  /* EN AZ IKI ALAN.
+   * Once uc sarti vardi. Mekan + isik dolu bir kayit zaten kullanilabilir
+   * bir sahnedir; ucuncu alan kullanicinin ekleyecegi sey. Uc sarti
+   * gereksiz yere 1.317 kaydi eliyordu. */
   const dolu = ALANLAR.filter((a) => kayit[a]).length;
-  if (dolu < 3) sorunlar.push(`yalnizca ${dolu} alan dolu`);
+  if (dolu < 2) sorunlar.push(`yalnizca ${dolu} alan dolu`);
 
   return sorunlar;
 }
