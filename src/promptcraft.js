@@ -323,8 +323,32 @@ const ASPECT = {
  */
 const WIDE_SHOT = /full body|wide|head to toe|knees up|three-quarter body|environmental/i;
 
+/**
+ * Kadraj GENIS mi - cozunurluk yukseltmesi buna bagli.
+ *
+ * Eski hali IKI YONDE birden yaniliyordu, olculdu:
+ *
+ *   1. YANLIS TETIK: poz metninde "wide-angle" gecen bir YAKIN PLAN
+ *      portre genis sayiliyordu ("wide-angle selfie perspective").
+ *      Sonuc 1024x1280 - yuz detayi butcesi bos yere buyuk kareye
+ *      yayiliyordu. Kutuphane sahnelerinde bu ifade sik geciyor.
+ *
+ *   2. KACAK: "full_body_standing" gibi alt_cizgili yazilmis gercek tam
+ *      boy kareler yakalanmiyordu (896x1120'de kaliyordu), cunku desen
+ *      bosluk bekliyordu.
+ *
+ * Duzeltme: butun sahne alanlari birlestiriliyor, ayirici karakterler
+ * boslugla normalize ediliyor ve "wide" yalnizca "wide-angle" DEGILSE
+ * genis sayiliyor.
+ */
 function isWideShot(scene) {
-  return WIDE_SHOT.test(`${scene.shot || ''} ${scene.pose || ''}`);
+  const metin = [scene.shot, scene.pose, scene.composition, scene.framing]
+    .filter(Boolean).join(' ')
+    .replace(/[_-]+/g, ' ')
+    .toLowerCase();
+  // "wide angle" bir LENS tarifi, kadraj tarifi degil.
+  const lensiz = metin.replace(/\bwide angle\b/g, ' ');
+  return WIDE_SHOT.test(lensiz) || /\bfull body\b|\bhead to toe\b|\bknees up\b|\bthree quarter body\b|\benvironmental\b/.test(lensiz);
 }
 
 /* ---------------------------------------------------- fiziksel cekirdek */

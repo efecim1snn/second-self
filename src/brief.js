@@ -321,7 +321,19 @@ function toScene(text, character) {
       mood: (personaBlock.moodsEn || ['relaxed'])[0],
       aspect: 'post',
       style: 'photo',
-      extra: request,
+      /* HAM TURKCE METIN PROMPT'A GIRMEZ.
+       *
+       * Bu dosya kurali 349. satirda kendisi yaziyor ("Turkce istek metni
+       * prompt'a HAM girmez - model anlamaz, sadece gurultu yapar") ama
+       * YEDEK dalda cigniyordu: `extra: request`. Yani kullanicinin yazdigi
+       * istek hicbir goreve uymadiginda - ki alisilmadik istekler tam olarak
+       * budur - Turkce cumle oldugu gibi prompt'un sonuna ekleniyordu.
+       * Model bunu anlamiyor, yalnizca gurultu olarak isliyor.
+       *
+       * Yedek dal zaten persona'dan makul bir sahne kuruyor; istek metni
+       * `request` alaninda duruyor ve panelde gosteriliyor - prompt'a
+       * girmesine gerek yok. */
+      extra: '',
       request,
     };
   }

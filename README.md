@@ -8,7 +8,7 @@ Dört stüdyo, tek araç:
 
 | Stüdyo | Ne yapar | API gerekir mi |
 |---|---|---|
-| 🧬 **AI Influencer** | Karakteri yaratır, kilitler, her karede aynı kişiyi üretir | Kareler için evet |
+| 🧬 **AI Influencer** | Karakteri yaratır, kilitler, her karede aynı kişiyi üretir + **677 hazır sahne** | Kareler için evet |
 | 📖 **Fotoroman** | Beş perdelik hikâye, konuşma balonları, sayfa düzeni, çekim senaryosu | **Hayır** (kareler hariç) |
 | 🎨 **Etsy POD** | Baskıya hazır tasarım, listeleme metni, pazar araştırması, mağazaya taslak | Hayır |
 | 📣 **Reklam** | Sosyal medya reklam ve duyuru görselleri | Hayır |
@@ -528,6 +528,72 @@ balon metni ve **her karenin tam promptu + seed'i**.
 
 ---
 
+## Sahne kütüphanesi
+
+Üretim ekranında **677 hazır sahne** var: mekân, ışık, poz, kıyafet, aksesuar
+tarifleri. Çipe bas ya da Türkçe ara ("kar", "kafe", "ayna", "deniz"), karta
+tıkla — sahne formu dolar, istediğin gibi değiştirirsin.
+
+**Karakterin değişmez.** Kütüphane yalnızca *sahneyi* verir; kimlik her zaman
+senin kilitli karakterinden gelir. Bu bir söz değil, yapısal bir kısıt: pakette
+kimlik alanı **yok**.
+
+### Neden "hazır prompt listesi" değil
+
+Kaynak kütüphanedeki promptlar kendi insanlarını tarif ediyor —
+*"young East Asian woman with long wavy dark brown hair"*. Ham gönderilseydi
+senin karakterin her karede başka birine dönerdi.
+
+Bir kısmında `{argument name="subject"}` yuvası var ve oraya kimlik enjekte
+edilebiliyor. Ama ölçüldü: **yuvası olan 1.212 promptun %61'inde yuvanın
+dışında da kimlik tarifi kalıyor.** Enjeksiyondan sonraki gerçek çıktı:
+
+```
+...24-year-old Japanese woman, SHOULDER-LENGTH STRAIGHT hair...
+...Her VERY LONG, WAVY hair is worn loose...
+```
+
+İki rakip tarif; model geç geçeni tercih ediyor. Temiz enjeksiyon yalnızca
+%3'ünde mümkündü.
+
+Bu yüzden kaynaktan **kişi değil sahne** çıkarıldı: yedi alan
+(`kadraj / poz / kıyafet / ortam / aksesuar / ışık / ruh hâli`), ham metin
+hiç taşınmadan.
+
+### Eleme
+
+14.753 benzersiz kayıttan **677**'si kaldı. Elenenler: gerçek kişi göndermesi,
+yaş sinyali, cinsellik, telifli karakter, çok kişili kadraj, grid/kolaj,
+metin-logo talebi, yapısal alan vermeyen düz yazı, ve prompt motorunun negatif
+listesiyle çelişen kayıtlar.
+
+Ayrıca `src/scenes.js` ışık havuzu aynı kaynaktan **8'den 40'a** çıkarıldı —
+12 sahne önerisi artık 12 farklı ışık veriyor (önce en fazla 8 olabiliyordu).
+
+### Sözü teste bağladık
+
+```bash
+node test/kutuphane.test.js
+```
+
+Altı kapı: kimlik izi, negatif çarpışması, görsel bağlantısı, gerçek karakterle
+uçtan uca kilit sınaması, Türkçe arama isabeti, sahne sözleşmesi. Kaynak günde
+iki kez güncelleniyor; bu test olmadan bir sonraki senkronda temizlik sessizce
+geri sızar.
+
+### Lisans
+
+Sahne tarifleri [ai-image-prompts-skill](https://github.com/YouMind-OpenLab/ai-image-prompts-skill)
+projesinden **türetilmiştir** (MIT, Copyright © 2026 YouMind-OpenLab).
+Tam metin: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
+Hiçbir prompt metni olduğu gibi taşınmamıştır. Kaynak görsel bağlantıları
+(`sourceMedia`) **tamamen atılmıştır** — onlar üçüncü kişilerin ürettiği
+kareler ve MIT devri derlemeyi kapsıyor, o görselleri değil. Bu depo hiçbir
+görsel dosyası ya da bağlantısı dağıtmaz.
+
+---
+
 ## Çıktılar nereye gidiyor?
 
 Her iş için masaüstünde **ayrı bir klasör** açılır. Görsel, prompt ve gönderi metni
@@ -673,6 +739,7 @@ src/
   glifler.js           harf genişliği tablosu + sistemdeki fontları ölçme
   providers/           görsel üretim platformları (her biri tek dosya)
   upscalers/           büyütme araçları (aynı desen: sen bağlarsın)
+  kutuphane/           677 hazır sahne (YouMind'dan türetildi, MIT) + arama
   studios/
     karakter/          AI Influencer
     fotoroman/         hikaye.js (perde/süreklilik) · diyalog.js (balon) · sayfa.js (çizim)

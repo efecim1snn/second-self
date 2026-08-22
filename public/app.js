@@ -21,6 +21,7 @@ const S = {
   cikti: null,        // masaustu cikti ayari
   mockup: null,       // listeleme gorseli ayari
   fotoroman: null,    // { ayar, hikaye, sayfa } - fotoroman studyosu
+  kutuphane: null,    // { etiket, sorgu, kayitlar, toplam, acik }
   sonKlasor: null,    // son uretimin is klasoru adi (metin oraya yazilsin diye)
   busy: false,
 };
@@ -1004,13 +1005,15 @@ async function renderProduction() {
         </button>`).join('')}
       </div>
       <hr class="sep">
+      <div id="kutbar"></div>
+      <hr class="sep">
       <div class="grid3">
         <div class="field"><label>Kadraj</label><input id="f_shot" value="${esc(S.scene.shot)}"></div>
-        <div class="field"><label>Poz</label><input id="f_pose" value="${esc(S.scene.pose)}"></div>
-        <div class="field"><label>Kiyafet</label><input id="f_outfit" value="${esc(S.scene.outfit)}"></div>
-        <div class="field"><label>Ortam</label><input id="f_setting" value="${esc(S.scene.setting)}"></div>
+        <div class="field"><label>Poz</label><textarea id="f_pose" rows="2">${esc(S.scene.pose)}</textarea></div>
+        <div class="field"><label>Kiyafet</label><textarea id="f_outfit" rows="2">${esc(S.scene.outfit)}</textarea></div>
+        <div class="field"><label>Ortam</label><textarea id="f_setting" rows="2">${esc(S.scene.setting)}</textarea></div>
         <div class="field"><label>Aksesuar</label><input id="f_props" value="${esc(S.scene.props)}"></div>
-        <div class="field"><label>Isik</label><input id="f_lighting" value="${esc(S.scene.lighting)}"></div>
+        <div class="field"><label>Isik</label><textarea id="f_lighting" rows="2">${esc(S.scene.lighting)}</textarea></div>
         <div class="field">
           <label>Format</label>
           <select id="f_aspect">
@@ -1040,6 +1043,10 @@ async function renderProduction() {
     <div id="output"></div>`;
 
   document.getElementById('f_aspect').value = S.scene.aspect || 'post';
+
+  // Sahne kutuphanesi seridi - await EDILMIYOR, kendi icinde ag istegi
+  // yapiyor ve formun cizilmesini bekletmemeli.
+  kutSeridiCiz();
 
   view.querySelectorAll('[data-scene]').forEach((b) => {
     b.onclick = () => { S.scene = S.scenes[Number(b.dataset.scene)]; renderProduction(); };
@@ -1125,6 +1132,133 @@ async function showPrompts(scene) {
   out.innerHTML = '<div class="card"><span class="spin"></span>prompt hazirlaniyor...</div>';
   const data = await api('/api/prompt', { scene });
   renderPromptCards(out, data);
+}
+
+/* ==================================================================
+   SAHNE KUTUPHANESI
+   ==================================================================
+
+   Kutuphane HAM PROMPT vermez, SAHNE ALANI verir. Karta basinca
+   asagidaki yedi alan doluyor ve kullanici uzerinde oynayabiliyor -
+   yeni bir uretim yolu yok, ayni form.
+
+   Kimlik hicbir zaman kutuphaneden gelmez; promptcraft'in kilitli
+   karakterinden gelir. Bu yuzden kartin karakteri degistirmesi
+   YAPISAL olarak imkansiz: pakette kimlik alani yok.
+*/
+
+function kutDurum() {
+  if (!S.kutuphane) {
+    S.kutuphane = { etiket: '', sorgu: '', kayitlar: [], toplam: 0, acik: false, bilgi: null, etiketler: [] };
+  }
+  return S.kutuphane;
+}
+
+async function kutSeridiCiz() {
+  const kutu = document.getElementById('kutbar');
+  if (!kutu) return;
+  const K = kutDurum();
+
+  if (!K.bilgi) {
+    try {
+      const r = await api('/api/kutuphane');
+      K.bilgi = r.bilgi;
+      K.etiketler = r.etiketler;
+    } catch (err) {
+      kutu.innerHTML = `<p class="help">Sahne kutuphanesi yuklenemedi: ${esc(err.message)}</p>`;
+      return;
+    }
+  }
+
+  kutu.innerHTML = `
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <b style="font-size:14px">Sahne kutuphanesi</b>
+      <span class="dim" style="font-size:12px">${K.bilgi.kayit} hazir sahne</span>
+    </div>
+    <p class="help" style="margin:4px 0 8px">
+      Hazir mekan / isik / poz tarifleri. Karta basinca asagidaki alanlar dolar,
+      istedigin gibi degistirirsin. <b>Karakterin degismez</b> - kutuphane yalnizca
+      sahneyi verir, kimlik her zaman senin kilitli karakterinden gelir.
+    </p>
+    <div class="choices" id="kutcipler">
+      ${K.etiketler.map((e) => `<button class="choice tiny ${K.etiket === e.ad ? 'on' : ''}" data-etiket="${esc(e.ad)}">${esc(e.ad)} <span class="dim">${e.n}</span></button>`).join('')}
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="kutara" placeholder="ara: kar, kafe, ayna, gece..." value="${esc(K.sorgu)}" style="flex:1">
+      <button type="button" class="ghost tiny" id="kutaraBtn">Ara</button>
+      ${K.etiket || K.sorgu ? '<button type="button" class="ghost tiny" id="kutsifirla">Temizle</button>' : ''}
+    </div>
+    <div id="kutsonuc" style="margin-top:8px"></div>`;
+
+  kutu.querySelectorAll('[data-etiket]').forEach((b) => {
+    b.onclick = () => {
+      K.etiket = K.etiket === b.dataset.etiket ? '' : b.dataset.etiket;
+      K.sorgu = '';
+      kutAra();
+    };
+  });
+  const arakutusu = document.getElementById('kutara');
+  const araBtn = document.getElementById('kutaraBtn');
+  if (araBtn) araBtn.onclick = () => { K.sorgu = arakutusu.value; K.etiket = ''; kutAra(); };
+  if (arakutusu) arakutusu.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); araBtn.onclick(); } };
+  const sifirla = document.getElementById('kutsifirla');
+  if (sifirla) sifirla.onclick = () => { K.etiket = ''; K.sorgu = ''; kutSeridiCiz(); };
+
+  if (K.etiket || K.sorgu) kutSonucCiz();
+}
+
+async function kutAra() {
+  const K = kutDurum();
+  const kutu = document.getElementById('kutsonuc');
+  if (kutu) kutu.innerHTML = '<span class="dim">araniyor...</span>';
+  try {
+    const r = await api('/api/kutuphane/ara', { sorgu: K.sorgu, etiket: K.etiket, limit: 12 });
+    K.kayitlar = r.kayitlar;
+    K.toplam = r.toplam;
+  } catch (err) {
+    if (kutu) kutu.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+    return;
+  }
+  kutSeridiCiz();
+}
+
+function kutSonucCiz() {
+  const K = kutDurum();
+  const kutu = document.getElementById('kutsonuc');
+  if (!kutu) return;
+  if (!K.kayitlar.length) {
+    kutu.innerHTML = '<p class="help">Sonuc yok. Baska bir kelime dene ya da bir cipe bas.</p>';
+    return;
+  }
+  kutu.innerHTML = `
+    <div class="choices">
+      ${K.kayitlar.map((k) => `
+        <button class="choice" data-kut="${k.i}" style="text-align:left">
+          <b style="font-size:12px">${esc((k.setting || k.lighting || k.pose || '').slice(0, 44))}</b><br>
+          <span class="dim" style="font-size:11px">
+            ${[k.lighting && 'ışık', k.pose && 'poz', k.outfit && 'kıyafet', k.props && 'aksesuar']
+              .filter(Boolean).join(' · ') || 'sahne'}
+          </span>
+        </button>`).join('')}
+    </div>
+    <p class="help">${K.toplam} sonuctan ${K.kayitlar.length} tanesi.</p>`;
+
+  kutu.querySelectorAll('[data-kut]').forEach((b) => {
+    b.onclick = () => kutSahneUygula(Number(b.dataset.kut));
+  });
+}
+
+/** Kutuphane kaydini sahne formuna yazar. */
+async function kutSahneUygula(i) {
+  try {
+    const r = await api('/api/kutuphane/sahne', { i, aspect: (S.scene && S.scene.aspect) || 'post' });
+    S.scene = { ...r.scene };
+    // Formu tazele - render() sahneyi yeniden ciziyor.
+    await renderProduction();
+    toast('Sahne yuklendi - alanlari degistirebilirsin', 'ok');
+  } catch (err) {
+    toast(err.message, 'bad');
+  }
 }
 
 function renderPromptCards(container, data) {

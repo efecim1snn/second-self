@@ -30,6 +30,7 @@ const output = require('./src/output');
 const providers = require('./src/providers');
 const upscalers = require('./src/upscalers');
 const studios = require('./src/studios');
+const kutuphane = require('./src/kutuphane');
 
 const PORT = Number(process.env.PORT || 4200);
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -907,6 +908,33 @@ const routes = {
       prompt: promptcraft.build(character, scene, config.dialect || spec.dialect),
       tasks: brief.taskList(),
     };
+  },
+
+  /* ------------------------------------------------------ sahne kutuphanesi */
+
+  'GET /api/kutuphane': async () => ({
+    bilgi: kutuphane.bilgi(),
+    etiketler: kutuphane.etiketler(),
+  }),
+
+  'POST /api/kutuphane/ara': async (body) => kutuphane.ara({
+    sorgu: body.sorgu, etiket: body.etiket,
+    limit: Math.min(Number(body.limit) || 12, 60),
+    atla: Math.max(Number(body.atla) || 0, 0),
+  }),
+
+  /**
+   * Kutuphane kaydini sahneye cevirir ve onizleme prompt'unu dondurur.
+   * Yeni bir uretim yolu ACMIYOR - uretim mevcut POST /api/uret ile.
+   */
+  'POST /api/kutuphane/sahne': async (body) => {
+    const character = store.getCharacter();
+    if (!character) throw notFound('Once karakter yarat.');
+    const kayit = kutuphane.bul(body.i);
+    if (!kayit) throw notFound('Kutuphane kaydi bulunamadi.');
+    const scene = kutuphane.sahneYap(kayit, { aspect: body.aspect });
+    const { spec, config } = activeProvider();
+    return { scene, prompt: promptcraft.build(character, scene, config.dialect || spec.dialect) };
   },
 
   'GET /api/plan': async () => {

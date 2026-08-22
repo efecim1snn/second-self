@@ -16,15 +16,62 @@ const SHOTS = {
   wide: 'wide environmental shot, the subject clearly readable in the frame',
 };
 
+/**
+ * ISIK HAVUZU
+ *
+ * Onceden 8 sabit dize vardi ve 12 sahne onerisinde ayni isik iki kez
+ * donuyordu - akis gorsel olarak tekduze cikiyordu.
+ *
+ * Asagidakiler YouMind OpenLab prompt kutuphanesinden (MIT) TURETILDI:
+ * kaynaktaki 677 sahne kaydinin isik alanlari cikarilip temizlendi,
+ * kimlik/kamera/kalite kalintilari elendi, benzer olanlar teklendi.
+ * Tam lisans: THIRD_PARTY_LICENSES.md
+ *
+ * NOT: bu dizinin uzamasi sahne ONERILERINI degistirir (pick() index
+ * tabanli), karakterin KIMLIGINI degistirmez - kimlik promptcraft
+ * physicalCore()'dan gelir ve bu dosyaya bagli degildir.
+ */
 const LIGHTING = [
-  'soft natural window light',
-  'golden hour sunlight',
-  'overcast diffused daylight',
-  'warm indoor lamp light',
-  'blue hour city light',
-  'bright midday sun with hard shadows',
-  'soft studio key light with fill',
-  'neon accent lighting at night',
+  'single soft key light positioned from the upper left',
+  'golden hour lighting',
+  'studio softbox, very soft, low, subtle',
+  'natural daylight with cool winter tones',
+  'direct built in camera flash',
+  'warm bedside lamp lighting with soft shadows',
+  'harsh direct flash, high contrast',
+  'mixed lighting, warm ambient room lighting in background',
+  'soft warm sunlight through window blinds',
+  'soft studio lighting',
+  'soft natural window light from the side, warm indoor ambience',
+  'soft indoor lighting, warm and natural, gentle, evenly lit',
+  'cool-toned, slightly overexposed, soft glow',
+  'high contrast, light leaks, chromatic aberration',
+  'high key lighting, soft with gentle highlights',
+  'soft, natural daylight from a window',
+  'bright natural, window sunlight, playful highlights',
+  'natural gym lighting, realistic shadows, clean neutral tones',
+  'soft diffused, ambient room light, low, gentle',
+  'natural night lighting, slightly dark, professional and calm',
+  'soft key-light, natural indoor arena tones',
+  'orange lantern glow, teal neon strips, high',
+  'flash photography style mixed with ambient street lighting',
+  'bright natural daylight, dappled sunlight',
+  'bright, hard natural sunlight',
+  'bright soft diffused lighting',
+  'cloudy daylight with harsh reflections',
+  'harsh cloudy daylight with uneven reflections',
+  'natural sunlight, golden hour, soft shadows',
+  'overhead indoor lighting, soft but directional from above',
+  'warm champagne and cream tones',
+  'soft golden light diffused through a pale overcast sky',
+  'bright, natural-looking indoor lighting, soft shadows',
+  'natural daylight, soft and even',
+  'overhead fluorescent lighting',
+  'soft, bright, natural-looking indoor daylight',
+  'warm golden hour natural light with soft shadows',
+  'cinematic with gentle highlights and specular reflections',
+  'natural sunlight from window',
+  'dramatic soft studio lighting',
 ];
 
 const POSES = {
