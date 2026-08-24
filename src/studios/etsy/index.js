@@ -23,6 +23,7 @@ const niches = require('./niches');
 const mockup = require('./mockup');
 const magaza = require('./magaza');
 const pazar = require('./pazar');
+const duvar = require('./duvar');
 const render = require('../../raster');
 
 /**
@@ -94,6 +95,7 @@ module.exports = {
   needsProvider: false,
   tabs: [
     { id: 'tasarim', label: 'Tasarim' },
+    { id: 'duvar', label: 'Duvar kagidi' },
     { id: 'listeleme', label: 'Listeleme metni' },
     { id: 'pazar', label: 'Pazar arastirmasi' },
     { id: 'magaza', label: 'Magaza' },
@@ -210,6 +212,112 @@ module.exports = {
      * ANAHTAR GEREKTIRMEZ. Nis kutuphanesi ve soz kaliplari araca gomulu -
      * kullanicinin hicbir sey baglamasina gerek yok.
      */
+    /* ------------------------------------------------------- duvar kagidi */
+
+    'GET /duvar/secenekler': async () => duvar.options(),
+
+    'POST /duvar/onizleme': async (body) => {
+      const r = duvar.uret({
+        aile: body.aile, palet: body.palet,
+        tohum: Number(body.tohum) || 1, olcu: body.olcu,
+      });
+      return { svg: r.svg, w: r.w, h: r.h, olcuLabel: r.olcuLabel };
+    },
+
+    /**
+     * PAKET URETIMI - N tasarim x M olcu.
+     *
+     * Vektor oldugu icin kredi harcamaz ve hizlidir: olculdu, 50 tasarim x
+     * 3 olcu = 150 SVG, 14 ms. Darbogaz SVG degil PNG'ye cevirme (tanesi
+     * ~0.7 sn), o yuzden PNG uretimi istege bagli - kullanici once SVG
+     * paketini gorup begenmezse tohum degistiriyor, kredi de zaman da
+     * harcanmiyor.
+     */
+    'POST /duvar/paket': async (body) => {
+      const adet = Math.min(Math.max(Number(body.adet) || 50, 1), 200);
+      const p = duvar.paket({
+        adet,
+        olculer: body.olculer,
+        aileler: body.aileler,
+        paletler: body.paletler,
+        tohum: Number(body.tohum) || 1,
+      });
+
+      // PNG istenmezse yalnizca ozet doner - panel SVG onizlemesini
+      // kendisi ciziyor, sunucudan gorsel beklemiyor.
+      if (!body.png) {
+        return {
+          adet: p.tasarimlar.length,
+          dosyaSayisi: p.dosyaSayisi,
+          olculer: p.olculer,
+          tasarimlar: p.tasarimlar.map((x) => ({
+            no: x.no, aile: x.aile, palet: x.palet, tohum: x.tohum,
+            onizleme: x.dosyalar[0].svg,
+          })),
+        };
+      }
+
+      if (!render.available()) {
+        const e = new Error(
+          'PNG uretmek icin Chrome/Edge bulunamadi. SVG paketini indirip kendi aracinda cevirebilirsin.'
+        );
+        e.status = 503;
+        throw e;
+      }
+
+      let job = null;
+      try {
+        job = isKlasoru(body.exportTo, 'etsy', `duvar kagidi paketi - ${adet} tasarim`);
+      } catch { /* masaustune yazilamiyorsa uretim yine de dursun */ }
+
+      let yazilan = 0;
+      const hatalar = [];
+      for (const tasarim of p.tasarimlar) {
+        for (const dosya of tasarim.dosyalar) {
+          try {
+            const buf = await render.svgToPng(dosya.svg, dosya.w, dosya.h, { background: '#ffffff' });
+            if (job) {
+              output.writeImage(job, buf, {
+                index: yazilan + 1, ext: 'png',
+                label: `${String(tasarim.no).padStart(2, '0')}-${tasarim.aile}-${tasarim.palet}-${dosya.olcu}`,
+              });
+            }
+            yazilan++;
+          } catch (err) {
+            // TEK DOSYA HATASI PAKETI COPE ATMASIN - 150 dosyalik bir
+            // pakette 3. dosyada durmak ilk 2'nin emegini de siler.
+            hatalar.push(`${tasarim.no}. tasarim / ${dosya.olcu}: ${err.message}`);
+          }
+        }
+      }
+
+      // Paket bilgisi ve listeleme metni ayni klasore.
+      if (job) {
+        try {
+          output.writeText(job, 'paket-bilgi.txt', [
+            `DUVAR KAGIDI PAKETI - ${adet} tasarim x ${p.olculer.length} olcu = ${p.dosyaSayisi} dosya`,
+            '='.repeat(64),
+            `Uretildi : ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`,
+            `Tohum    : ${Number(body.tohum) || 1}  (ayni tohum ayni paketi tekrar uretir)`,
+            `Olculer  : ${p.olculer.map((o) => `${duvar.OLCULER[o].label} ${duvar.OLCULER[o].w}x${duvar.OLCULER[o].h}`).join(' | ')}`,
+            '',
+            'TASARIMLAR',
+            ...p.tasarimlar.map((x) => `  ${String(x.no).padStart(2, '0')}. ${x.aile} / ${x.palet} (tohum ${x.tohum})`),
+            '',
+            hatalar.length ? `URETILEMEYEN: ${hatalar.length}\n  ${hatalar.join('\n  ')}` : 'Tum dosyalar uretildi.',
+          ].join('\n'));
+        } catch { /* bilgi dosyasi yazilamadi, gorseller yerinde */ }
+      }
+
+      return {
+        adet: p.tasarimlar.length,
+        dosyaSayisi: p.dosyaSayisi,
+        yazilan,
+        hatalar,
+        export: job,
+      };
+    },
+
     'GET /nisler': async () => ({
       nisler: niches.list(),
       not: 'Bu liste araca gomulu; anahtar gerektirmez. Canli pazar verisi icin "Pazar arastirmasi" sekmesine bak.',

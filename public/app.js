@@ -22,6 +22,7 @@ const S = {
   mockup: null,       // listeleme gorseli ayari
   fotoroman: null,    // { ayar, hikaye, sayfa } - fotoroman studyosu
   kutuphane: null,    // { etiket, sorgu, kayitlar, toplam, acik }
+  duvar: null,        // { adet, tohum, olculer, aileler, paletler, paket }
   sonKlasor: null,    // son uretimin is klasoru adi (metin oraya yazilsin diye)
   busy: false,
 };
@@ -1919,6 +1920,7 @@ async function fotoromanCikti(tip) {
 
 async function renderStudioDesign(studioId) {
   if (S.tab === 'arsiv') return renderStudioArchive(studioId);
+  if (studioId === 'etsy' && S.tab === 'duvar') return renderDuvar();
   if (studioId === 'etsy' && S.tab === 'listeleme') return renderEtsyListing();
   if (studioId === 'etsy' && S.tab === 'pazar') return renderEtsyPazar();
   if (studioId === 'etsy' && S.tab === 'magaza') return renderEtsyMagaza();
@@ -2404,6 +2406,227 @@ async function generateDesign(studioId) {
   } finally {
     btn.disabled = false;
     btn.textContent = 'PNG uret';
+  }
+}
+
+/* ==================================================================
+   DUVAR KAGIDI (Etsy)
+   ==================================================================
+
+   Tamamen VEKTOR - kredi harcamaz, aninda uretir, her ekrana kayipsiz
+   olceklenir. AI kullanilmiyor cunku bedava saglayici 686x858'de
+   tikaniyor ve duvar kagidi 1290x2796 ister.
+
+   Onizleme SVG olarak tarayicida ciziliyor: tohum degistirip paketi
+   begenene kadar deneme tamamen bedava ve aninda. PNG uretimi ayri bir
+   adim, cunku 150 dosyayi rasterlemek ~2 dakika suruyor.
+*/
+
+function duvarDurum() {
+  if (!S.duvar) {
+    S.duvar = {
+      adet: 50, tohum: 1,
+      olculer: null,   // null = varsayilan (telefon + tablet + masaustu)
+      aileler: [], paletler: [],
+      paket: null, secenekler: null, uretiliyor: false,
+    };
+  }
+  return S.duvar;
+}
+
+async function renderDuvar() {
+  const D = duvarDurum();
+  if (!D.secenekler) D.secenekler = await api('/api/etsy/duvar/secenekler');
+  const O = D.secenekler;
+  if (!D.olculer) D.olculer = [...O.paketVarsayilan];
+
+  const grupla = {};
+  O.olculer.forEach((o) => { (grupla[o.grup] = grupla[o.grup] || []).push(o); });
+
+  view.innerHTML = `
+    <h1>Duvar kagidi</h1>
+    <p class="lead">Vektor uretilir: <b>kredi harcamaz</b>, her ekrana kayipsiz olceklenir.
+    Bir tasarim, sectigin her cihaz olcusu icin ayri dosya olur.</p>
+
+    ${O.paletSorunu.length ? `<div class="notice bad">Bozuk palet: ${O.paletSorunu.map(esc).join(', ')}</div>` : ''}
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Paket</h2>
+        <div class="field">
+          <label>Kac tasarim</label>
+          <input type="number" id="dv_adet" min="1" max="200" value="${D.adet}">
+          <p class="help">80'e kadar her tasarim farkli aile+palet birlesimi alir; ustunde tekrar baslar.</p>
+        </div>
+        <div class="field">
+          <label>Tohum</label>
+          <div class="row">
+            <input type="number" id="dv_tohum" value="${D.tohum}" style="flex:1">
+            <button type="button" class="ghost tiny" id="dv_baska">Baska paket</button>
+          </div>
+          <p class="help">Ayni tohum ayni paketi birebir tekrar uretir - musteri yeniden indirmek isterse islerine yarar.</p>
+        </div>
+
+        <div class="field">
+          <label>Cihaz olculeri</label>
+          ${Object.entries(grupla).map(([grup, liste]) => `
+            <div style="margin-bottom:6px">
+              <span class="dim" style="font-size:12px">${esc(grup)}</span><br>
+              ${liste.map((o) => `<label style="display:inline-block;margin:3px 8px 3px 0;font-size:13px">
+                <input type="checkbox" data-olcu="${esc(o.key)}" ${D.olculer.includes(o.key) ? 'checked' : ''}>
+                ${esc(o.label)} <span class="dim">${o.w}x${o.h}</span>
+              </label>`).join('')}
+            </div>`).join('')}
+        </div>
+
+        <div class="field">
+          <label>Aileler <span class="dim">(bos = hepsi)</span></label>
+          <div class="choices">
+            ${O.aileler.map((a) => `<button type="button" class="choice tiny ${D.aileler.includes(a.key) ? 'on' : ''}" data-aile="${esc(a.key)}" title="${esc(a.aciklama)}">${esc(a.label)}</button>`).join('')}
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Paletler <span class="dim">(bos = hepsi)</span></label>
+          <div class="choices">
+            ${O.paletler.map((p) => `<button type="button" class="choice tiny ${D.paletler.includes(p.key) ? 'on' : ''}" data-palet="${esc(p.key)}">
+              <span style="display:inline-block;width:34px;height:10px;border-radius:2px;background:linear-gradient(90deg,${p.ornek.join(',')});vertical-align:middle;margin-right:5px"></span>${esc(p.label)}
+            </button>`).join('')}
+          </div>
+        </div>
+
+        <div id="dv_ozet"></div>
+        <div class="row">
+          <button type="button" class="btn" id="dv_onizle">Paketi gor</button>
+          <button type="button" class="ghost" id="dv_uret">PNG uret ve masaustune yaz</button>
+        </div>
+        <div id="dv_out"></div>
+      </div>
+
+      <div class="card">
+        <h2>Onizleme</h2>
+        <div id="dv_prev"><span class="dim">"Paketi gor" tusuna bas - bedava ve aninda.</span></div>
+      </div>
+    </div>`;
+
+  const topla = () => {
+    D.adet = Math.max(1, Math.min(200, Number(document.getElementById('dv_adet').value) || 50));
+    D.tohum = Number(document.getElementById('dv_tohum').value) || 1;
+    D.olculer = [...view.querySelectorAll('[data-olcu]:checked')].map((x) => x.dataset.olcu);
+    duvarOzet();
+  };
+  view.querySelectorAll('#dv_adet,#dv_tohum,[data-olcu]').forEach((el) => { el.onchange = topla; });
+
+  view.querySelectorAll('[data-aile]').forEach((b) => {
+    b.onclick = () => {
+      const k = b.dataset.aile;
+      const i = D.aileler.indexOf(k);
+      if (i >= 0) D.aileler.splice(i, 1); else D.aileler.push(k);
+      b.classList.toggle('on');
+      duvarOzet();
+    };
+  });
+  view.querySelectorAll('[data-palet]').forEach((b) => {
+    b.onclick = () => {
+      const k = b.dataset.palet;
+      const i = D.paletler.indexOf(k);
+      if (i >= 0) D.paletler.splice(i, 1); else D.paletler.push(k);
+      b.classList.toggle('on');
+      duvarOzet();
+    };
+  });
+
+  document.getElementById('dv_baska').onclick = () => {
+    D.tohum += 1;
+    document.getElementById('dv_tohum').value = D.tohum;
+    duvarOnizle();
+  };
+  document.getElementById('dv_onizle').onclick = () => duvarOnizle();
+  document.getElementById('dv_uret').onclick = () => duvarUret();
+
+  duvarOzet();
+  if (D.paket) duvarPaketCiz();
+}
+
+/** Kac dosya cikacagini ve tahmini sureyi onceden soyle. */
+function duvarOzet() {
+  const D = duvarDurum();
+  const kutu = document.getElementById('dv_ozet');
+  if (!kutu) return;
+  const olcuSayisi = (D.olculer || []).length;
+  if (!olcuSayisi) {
+    kutu.innerHTML = '<div class="notice warn">En az bir cihaz olcusu sec.</div>';
+    return;
+  }
+  const dosya = D.adet * olcuSayisi;
+  // Olculdu: PNG basina ~0.87 sn (18 dosya 15.6 sn).
+  const sn = Math.round(dosya * 0.87);
+  kutu.innerHTML = `<p class="help"><b>${D.adet} tasarim x ${olcuSayisi} olcu = ${dosya} dosya.</b>
+    Onizleme bedava ve aninda; PNG uretimi ~${sn < 60 ? `${sn} saniye` : `${Math.round(sn / 60)} dakika`} surer.</p>`;
+}
+
+async function duvarOnizle() {
+  const D = duvarDurum();
+  const kutu = document.getElementById('dv_prev');
+  kutu.innerHTML = '<span class="spin"></span> hazirlaniyor...';
+  try {
+    const r = await api('/api/etsy/duvar/paket', {
+      adet: D.adet, tohum: D.tohum, olculer: D.olculer,
+      aileler: D.aileler, paletler: D.paletler,
+    });
+    D.paket = r;
+    duvarPaketCiz();
+  } catch (err) {
+    kutu.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  }
+}
+
+function duvarPaketCiz() {
+  const D = duvarDurum();
+  const kutu = document.getElementById('dv_prev');
+  if (!kutu || !D.paket) return;
+  const goster = D.paket.tasarimlar.slice(0, 24);
+  kutu.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+      ${goster.map((t) => `
+        <div>
+          <div style="width:100%;border-radius:6px;overflow:hidden;line-height:0">
+            ${t.onizleme.replace('<svg ', '<svg style="width:100%;height:auto;display:block" ')}
+          </div>
+          <span class="dim" style="font-size:10px">${t.no}. ${esc(t.aile)}</span>
+        </div>`).join('')}
+    </div>
+    <p class="help">${D.paket.adet} tasarimin ilk ${goster.length}'i - telefon olcusunde.
+    Toplam <b>${D.paket.dosyaSayisi} dosya</b> uretilecek.</p>`;
+}
+
+async function duvarUret() {
+  const D = duvarDurum();
+  if (D.uretiliyor) return;
+  D.uretiliyor = true;
+  const btn = document.getElementById('dv_uret');
+  const out = document.getElementById('dv_out');
+  const eski = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>uretiliyor';
+  out.innerHTML = `<div class="notice">${D.adet * D.olculer.length} dosya uretiliyor, bu birkac dakika surebilir...</div>`;
+  try {
+    const r = await api('/api/etsy/duvar/paket', {
+      adet: D.adet, tohum: D.tohum, olculer: D.olculer,
+      aileler: D.aileler, paletler: D.paletler,
+      png: true, exportTo: S.sonKlasor || undefined,
+    });
+    if (r.export) S.sonKlasor = r.export.name;
+    out.innerHTML = `${exportBar(r.export)}
+      <p class="help"><b>${r.yazilan}/${r.dosyaSayisi} dosya</b> yazildi.
+      ${r.hatalar.length ? `<br><span class="dim">Uretilemeyen ${r.hatalar.length}: ${esc(r.hatalar.slice(0, 3).join(' · '))}</span>` : ''}
+      Klasorde ayrica <b>paket-bilgi.txt</b> var - hangi tasarim hangi tohumdan uretildi yaziyor.</p>`;
+  } catch (err) {
+    out.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  } finally {
+    D.uretiliyor = false;
+    btn.disabled = false;
+    btn.textContent = eski;
   }
 }
 
